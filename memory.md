@@ -1,0 +1,136 @@
+# Project Memory
+
+這份檔案用來保留跨 session 的開發記憶，避免後續 agent 或開發者重新理解需求時遺漏既有決策。
+
+注意：
+
+- `memory.md` 是開發記憶，不是正式需求的唯一依據。
+- 正式規格以 `README.md` 與 `docs/` 內文件為準。
+- 每次有重大需求變更、架構調整、實作完成或卡點時，都應更新此檔。
+
+## 目前狀態
+
+- 已開始實作 MVP。
+- 已完成正式規格文件整理。
+- 已確認需求 01：手動同步單筆 mapping。
+- 已確認需求 02：多專案定時推送。
+
+## 已確認決策
+
+- 執行環境只有 `Java 17`，且本機有安裝 `git`。
+- 不使用 `Node.js`。
+- 前端使用 `HTML + JavaScript`。
+- 本機後端使用 `Java 17` localhost HTTP 服務。
+- Git 執行方式為 Java 透過 `ProcessBuilder` 呼叫系統 `git`。
+- 不使用資料庫。
+- 廠商 repo 使用 `HTTPS`。
+- 目標 remote 使用 `SSH`。
+- 若本機目錄沒有 repo，需先 `clone`。
+- 若本機目錄已有 repo，需直接 `fetch` 後同步。
+- UI 使用 `checkbox` 控制本次是否 `git push -f`。
+- 手動同步一次只執行一筆 mapping。
+- 設定需以可攜式設定檔保存，方便複製給其他人使用。
+- 主設定檔與本機執行狀態檔分離保存。
+- 系統需支援多專案定時推送。
+- 來源與目標分支通常同名，系統需支援同名分支為預設模式。
+- 某些 mapping 需標記為 `manualOnly=true`，不得自動排程。
+- 某些 mapping 需標記為 `reviewRequired=true`，同步前需先看 diff 並人工確認。
+- UI 必須可隨時修改 remote、branch、是否自動同步等設定，並寫回 `config/settings.json`。
+- 本機目錄應可由 UI 直接選資料夾，不以手打路徑為主要方式。
+- Mappings 列表需提供行內 `Force Push` 與 `自動同步` 勾選。
+- Remotes 需支援自訂 Tab / 群組，例如 `SIT`、`UAT`。
+- Remote 已重構為「頁籤模板」模型，每個頁籤保存 `baseUrl`，Mapping 只填最後的 `project.git`。
+- 新增與編輯 Mapping / Remote 必須使用 popup modal，不佔主畫面中央區域。
+- 需支援 Windows 啟動腳本，至少提供 `run.bat` 與 `run.ps1`。
+- Mapping 的本地路徑模型已改成 `localWorkspaceRoot + localProjectName`，不再直接輸入單一 repo 路徑。
+- 同一本地專案可對應多筆 mapping，且每筆 mapping 使用獨立內部 remote 名稱。
+
+## 檔案結構決策
+
+- 正式規格入口：[README.md](/Users/sonic711/Desktop/development/git-web/README.md)
+- 產品總覽：[docs/01-product-overview.md](/Users/sonic711/Desktop/development/git-web/docs/01-product-overview.md)
+- 使用流程：[docs/02-use-cases-and-flow.md](/Users/sonic711/Desktop/development/git-web/docs/02-use-cases-and-flow.md)
+- 技術架構：[docs/03-technical-architecture.md](/Users/sonic711/Desktop/development/git-web/docs/03-technical-architecture.md)
+- 需求 01：[docs/04-requirement-01-vendor-branch-push.md](/Users/sonic711/Desktop/development/git-web/docs/04-requirement-01-vendor-branch-push.md)
+- 待確認事項：[docs/05-open-questions.md](/Users/sonic711/Desktop/development/git-web/docs/05-open-questions.md)
+- 需求 02：[docs/06-requirement-02-scheduled-sync.md](/Users/sonic711/Desktop/development/git-web/docs/06-requirement-02-scheduled-sync.md)
+- 設定檔 Schema：[docs/07-config-schema.md](/Users/sonic711/Desktop/development/git-web/docs/07-config-schema.md)
+- API 契約：[docs/08-api-contract.md](/Users/sonic711/Desktop/development/git-web/docs/08-api-contract.md)
+- Java 模組設計：[docs/09-java-module-design.md](/Users/sonic711/Desktop/development/git-web/docs/09-java-module-design.md)
+- UI 規格：[docs/10-ui-spec.md](/Users/sonic711/Desktop/development/git-web/docs/10-ui-spec.md)
+
+## 目前設定檔策略
+
+- 主設定檔：`config/settings.json`
+- 本機執行狀態檔：`state/runtime-state.json`
+- 執行紀錄：`logs/*.log`
+
+主設定檔保存：
+
+- remotes
+- mappings
+- schedule
+- manualOnly
+- reviewRequired
+- sameBranchNameExpected
+- remote baseUrl
+- mapping targetRepoName
+
+本機執行狀態檔保存：
+
+- lastRunAt
+- lastStatus
+- lastRunSource
+- nextRunAt
+- running
+- lastMessage
+
+## 尚未實作
+
+- API 錯誤碼細緻化
+- UI 細節優化
+- 真機 HTTP 啟動驗證
+
+## 主要待確認事項
+
+- repo URL 比對規則要不要正規化
+- log 保留政策
+- 排程格式是否只做固定間隔
+- 共用機器時的併發保護
+- `git push -f` 未來是否改成 `--force-with-lease`
+- review gate 的差異呈現粒度要到 commit list 還是 file diff
+
+## 建議下一步
+
+1. 依 `docs/07-config-schema.md` 建立設定模型與驗證。
+2. 依 `docs/09-java-module-design.md` 建立 Java 專案骨架。
+3. 依 `docs/08-api-contract.md` 實作 API。
+4. 依 `docs/10-ui-spec.md` 建立第一版 UI。
+
+## Session Log
+
+### 2026-04-20
+
+- 建立專案規格文件。
+- 將原本泛用方案收斂為 `Java 17 + git CLI + HTML/JS`。
+- 確認設定需為可攜式設定檔。
+- 新增多專案定時推送需求。
+- 建立本 `memory.md` 作為跨 session 記憶檔。
+- 補充 manual-only、review-required 與 UI 回寫設定檔需求。
+- 補齊設定檔 schema、API 契約、Java 模組設計與 UI 規格文件。
+- 建立 `src/app` Java MVP 骨架。
+- 建立 `static/` 單頁 UI。
+- 建立 `run.sh` 啟動腳本。
+- `javac` 編譯成功。
+- sandbox 不允許綁定 localhost port，因此未能在此環境完成 HTTP 啟動驗證。
+- 補上本機資料夾選擇 API、Mappings 行內 checkbox、Remotes 分組 Tab。
+- 補上 Mapping / Remote 刪除功能。
+- Diff 頁升級為 commit list + changed files list。
+- 列表加入更清楚的最後狀態、觸發來源與錯誤訊息。
+- 所有主要按鈕操作都會在畫面上顯示成功或失敗通知。
+- 將 Remote 模型從完整 URL 重構為 `baseUrl` 頁籤模板。
+- Mapping 改為保存 `targetRepoName`，由後端組合完整 target remote URL。
+- 新增與編輯 Mapping / Remote 改為 popup modal，主畫面聚焦在推送列表。
+- 補上 Windows 啟動腳本 `run.bat` 與 `run.ps1`。
+- 將本地 repo 設定改為「主目錄 + 專案資料夾名稱」模式，並保留舊 `localRepoPath` 相容轉換。
+- 同一本地 repo 新增執行鎖，避免多筆 mapping 同時操作互相干擾。

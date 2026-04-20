@@ -6,8 +6,10 @@
 
 1. 使用者可設定廠商 repo 的 `HTTPS` URL、來源 branch、本機專案目錄。
 2. 系統會先檢查指定目錄是否已有 repo；若沒有則先 `clone`。
+   本機設定改為「主目錄 + 專案資料夾名稱」，系統會自動組出實際 repo 路徑。
 3. 使用者可設定目標 remote 的 `SSH` URL 與目標 branch。
 4. 系統可將廠商來源 branch 推送到指定目標 remote / branch。
+   同一本地專案可建立多筆 mapping，推送到不同 remote。
 5. UI 以 `checkbox` 控制本次同步是否使用 `git push -f`。
 6. 一次只執行一筆 mapping 規則。
 7. 系統設定以可攜式設定檔保存，方便直接複製給其他人使用。
@@ -49,3 +51,29 @@
 - 可複製的業務設定與本機執行狀態分離保存。
 - `memory.md` 用於保留開發進度、已確認決策與最近 session 歷程，方便後續 agent 接手。
 - 主設定檔是可匯入、可匯出的單一來源，UI 修改後必須立即回寫。
+
+## 啟動方式
+
+macOS / Linux:
+
+```bash
+./run.sh
+```
+
+Windows Command Prompt:
+
+```bat
+run.bat
+```
+
+Windows PowerShell:
+
+```powershell
+.\run.ps1
+```
+
+前提：
+
+- 需安裝 `JDK 17`
+- 需安裝 `git`
+- `config/settings.json` 內的本機路徑需改成目標機器可用的路徑

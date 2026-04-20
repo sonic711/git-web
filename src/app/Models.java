@@ -1,0 +1,344 @@
+package app;
+
+import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+final class Models {
+    private Models() {
+    }
+
+    static String nowIso() {
+        return OffsetDateTime.now(ZoneOffset.ofHours(8)).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+    }
+
+    static final class AppConfig {
+        int version = 1;
+        String updatedAt = nowIso();
+        List<RemoteConfig> remotes = new ArrayList<>();
+        List<MappingConfig> mappings = new ArrayList<>();
+
+        static AppConfig fromMap(Map<String, Object> map) {
+            AppConfig config = new AppConfig();
+            config.version = intValue(map.getOrDefault("version", 1));
+            config.updatedAt = stringValue(map.getOrDefault("updatedAt", nowIso()));
+            for (Object item : Json.asList(map.getOrDefault("remotes", List.of()))) {
+                config.remotes.add(RemoteConfig.fromMap(Json.asObject(item)));
+            }
+            for (Object item : Json.asList(map.getOrDefault("mappings", List.of()))) {
+                config.mappings.add(MappingConfig.fromMap(Json.asObject(item)));
+            }
+            return config;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("version", version);
+            map.put("updatedAt", updatedAt);
+            List<Object> remoteList = new ArrayList<>();
+            for (RemoteConfig remote : remotes) {
+                remoteList.add(remote.toMap());
+            }
+            map.put("remotes", remoteList);
+            List<Object> mappingList = new ArrayList<>();
+            for (MappingConfig mapping : mappings) {
+                mappingList.add(mapping.toMap());
+            }
+            map.put("mappings", mappingList);
+            return map;
+        }
+    }
+
+    static final class RemoteConfig {
+        String id;
+        String name;
+        String baseUrl;
+        boolean enabled;
+        String legacyUrl;
+
+        static RemoteConfig fromMap(Map<String, Object> map) {
+            RemoteConfig config = new RemoteConfig();
+            config.id = stringValue(map.get("id"));
+            String legacyGroup = nullableString(map.get("group"));
+            String configuredName = nullableString(map.get("name"));
+            config.name = firstNonBlank(configuredName, legacyGroup, config.id);
+            config.legacyUrl = nullableString(map.get("url"));
+            config.baseUrl = firstNonBlank(nullableString(map.get("baseUrl")), deriveBaseUrl(config.legacyUrl));
+            config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
+            return config;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", id);
+            map.put("name", name);
+            map.put("baseUrl", baseUrl);
+            map.put("enabled", enabled);
+            return map;
+        }
+    }
+
+    static final class MappingConfig {
+        String id;
+        String name;
+        String vendorRepoUrl;
+        String localWorkspaceRoot;
+        String localProjectName;
+        String legacyLocalRepoPath;
+        String sourceBranch;
+        String targetRemoteId;
+        String targetRepoName;
+        String targetBranch;
+        boolean sameBranchNameExpected;
+        boolean enabled;
+        boolean allowForcePush;
+        boolean manualOnly;
+        boolean reviewRequired;
+        ScheduleConfig schedule = new ScheduleConfig();
+
+        static MappingConfig fromMap(Map<String, Object> map) {
+            MappingConfig config = new MappingConfig();
+            config.id = stringValue(map.get("id"));
+            config.name = stringValue(map.get("name"));
+            config.vendorRepoUrl = stringValue(map.get("vendorRepoUrl"));
+            config.legacyLocalRepoPath = nullableString(map.get("localRepoPath"));
+            config.localWorkspaceRoot = nullableString(map.get("localWorkspaceRoot"));
+            config.localProjectName = nullableString(map.get("localProjectName"));
+            config.sourceBranch = stringValue(map.get("sourceBranch"));
+            config.targetRemoteId = stringValue(map.get("targetRemoteId"));
+            config.targetRepoName = nullableString(map.get("targetRepoName"));
+            config.targetBranch = stringValue(map.get("targetBranch"));
+            config.sameBranchNameExpected = booleanValue(map.getOrDefault("sameBranchNameExpected", Boolean.FALSE));
+            config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
+            config.allowForcePush = booleanValue(map.getOrDefault("allowForcePush", Boolean.FALSE));
+            config.manualOnly = booleanValue(map.getOrDefault("manualOnly", Boolean.FALSE));
+            config.reviewRequired = booleanValue(map.getOrDefault("reviewRequired", Boolean.FALSE));
+            Object scheduleObject = map.get("schedule");
+            if (scheduleObject instanceof Map<?, ?> scheduleMap) {
+                config.schedule = ScheduleConfig.fromMap(Json.asObject(scheduleMap));
+            }
+            return config;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", id);
+            map.put("name", name);
+            map.put("vendorRepoUrl", vendorRepoUrl);
+            map.put("localWorkspaceRoot", localWorkspaceRoot);
+            map.put("localProjectName", localProjectName);
+            map.put("sourceBranch", sourceBranch);
+            map.put("targetRemoteId", targetRemoteId);
+            map.put("targetRepoName", targetRepoName);
+            map.put("targetBranch", targetBranch);
+            map.put("sameBranchNameExpected", sameBranchNameExpected);
+            map.put("enabled", enabled);
+            map.put("allowForcePush", allowForcePush);
+            map.put("manualOnly", manualOnly);
+            map.put("reviewRequired", reviewRequired);
+            map.put("schedule", schedule.toMap());
+            return map;
+        }
+
+        Path localRepoPath() {
+            return Path.of(localWorkspaceRoot).resolve(localProjectName);
+        }
+
+        String displayLocalRepoPath() {
+            return localRepoPath().toString();
+        }
+    }
+
+    static final class ScheduleConfig {
+        boolean enabled;
+        String type = "fixed-interval";
+        int intervalMinutes = 30;
+
+        static ScheduleConfig fromMap(Map<String, Object> map) {
+            ScheduleConfig config = new ScheduleConfig();
+            config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.FALSE));
+            config.type = stringValue(map.getOrDefault("type", "fixed-interval"));
+            config.intervalMinutes = intValue(map.getOrDefault("intervalMinutes", 30));
+            return config;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("enabled", enabled);
+            map.put("type", type);
+            map.put("intervalMinutes", intervalMinutes);
+            return map;
+        }
+    }
+
+    static final class RuntimeState {
+        Map<String, MappingRuntimeState> mappingStates = new LinkedHashMap<>();
+
+        static RuntimeState fromMap(Map<String, Object> map) {
+            RuntimeState state = new RuntimeState();
+            Object rawStates = map.getOrDefault("mappingStates", Map.of());
+            if (rawStates instanceof Map<?, ?> stateMap) {
+                for (Map.Entry<String, Object> entry : Json.asObject(stateMap).entrySet()) {
+                    state.mappingStates.put(entry.getKey(), MappingRuntimeState.fromMap(Json.asObject(entry.getValue())));
+                }
+            }
+            return state;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> root = new LinkedHashMap<>();
+            Map<String, Object> states = new LinkedHashMap<>();
+            for (Map.Entry<String, MappingRuntimeState> entry : mappingStates.entrySet()) {
+                states.put(entry.getKey(), entry.getValue().toMap());
+            }
+            root.put("mappingStates", states);
+            return root;
+        }
+    }
+
+    static final class MappingRuntimeState {
+        String lastRunAt;
+        String lastStatus = "never";
+        String lastRunSource;
+        String nextRunAt;
+        boolean running;
+        String lastLogPath;
+        String lastMessage;
+
+        static MappingRuntimeState fromMap(Map<String, Object> map) {
+            MappingRuntimeState state = new MappingRuntimeState();
+            state.lastRunAt = nullableString(map.get("lastRunAt"));
+            state.lastStatus = stringValue(map.getOrDefault("lastStatus", "never"));
+            state.lastRunSource = nullableString(map.get("lastRunSource"));
+            state.nextRunAt = nullableString(map.get("nextRunAt"));
+            state.running = booleanValue(map.getOrDefault("running", Boolean.FALSE));
+            state.lastLogPath = nullableString(map.get("lastLogPath"));
+            state.lastMessage = nullableString(map.get("lastMessage"));
+            return state;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("lastRunAt", lastRunAt);
+            map.put("lastStatus", lastStatus);
+            map.put("lastRunSource", lastRunSource);
+            map.put("nextRunAt", nextRunAt);
+            map.put("running", running);
+            map.put("lastLogPath", lastLogPath);
+            map.put("lastMessage", lastMessage);
+            return map;
+        }
+    }
+
+    static int intValue(Object value) {
+        if (value instanceof Integer number) {
+            return number;
+        }
+        if (value instanceof Long number) {
+            return number.intValue();
+        }
+        if (value instanceof Double number) {
+            return number.intValue();
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return Integer.parseInt(string);
+        }
+        throw new IllegalArgumentException("Expected integer but got " + value);
+    }
+
+    static boolean booleanValue(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String string) {
+            return Boolean.parseBoolean(string);
+        }
+        throw new IllegalArgumentException("Expected boolean but got " + value);
+    }
+
+    static String stringValue(Object value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Expected string but got null");
+        }
+        String result = String.valueOf(value);
+        if (result.isBlank()) {
+            throw new IllegalArgumentException("String value must not be blank");
+        }
+        return result;
+    }
+
+    static String nullableString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    static String deriveBaseUrl(String gitUrl) {
+        if (gitUrl == null || gitUrl.isBlank()) {
+            return null;
+        }
+        int slashIndex = gitUrl.lastIndexOf('/');
+        int colonIndex = gitUrl.startsWith("ssh://") ? -1 : gitUrl.lastIndexOf(':');
+        int splitIndex = Math.max(slashIndex, colonIndex);
+        return splitIndex >= 0 ? gitUrl.substring(0, splitIndex + 1) : gitUrl;
+    }
+
+    static String extractRepoName(String gitUrl) {
+        if (gitUrl == null || gitUrl.isBlank()) {
+            return null;
+        }
+        int slashIndex = gitUrl.lastIndexOf('/');
+        int colonIndex = gitUrl.startsWith("ssh://") ? -1 : gitUrl.lastIndexOf(':');
+        int splitIndex = Math.max(slashIndex, colonIndex);
+        return splitIndex >= 0 && splitIndex + 1 < gitUrl.length() ? gitUrl.substring(splitIndex + 1) : gitUrl;
+    }
+
+    static String buildGitUrl(String baseUrl, String repoName) {
+        require(baseUrl != null && !baseUrl.isBlank(), "baseUrl is required");
+        require(repoName != null && !repoName.isBlank(), "repoName is required");
+        if (baseUrl.endsWith("/") || baseUrl.endsWith(":")) {
+            return baseUrl + repoName;
+        }
+        return baseUrl + "/" + repoName;
+    }
+
+    static String stripGitSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        return value.endsWith(".git") ? value.substring(0, value.length() - 4) : value;
+    }
+
+    static void require(boolean condition, String message) {
+        if (!condition) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    static RemoteConfig findRemote(AppConfig config, String remoteId) {
+        return config.remotes.stream()
+            .filter(remote -> Objects.equals(remote.id, remoteId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Remote not found: " + remoteId));
+    }
+
+    static MappingConfig findMapping(AppConfig config, String mappingId) {
+        return config.mappings.stream()
+            .filter(mapping -> Objects.equals(mapping.id, mappingId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Mapping not found: " + mappingId));
+    }
+}

@@ -1,0 +1,237 @@
+# UI 規格
+
+## 目的
+
+定義第一版 Web UI 的頁面、欄位與互動，讓前端與後端對齊。
+
+## 頁面列表
+
+1. Mapping 列表頁
+2. Mapping Modal
+3. Remote Tab Modal
+4. 排程設定頁
+5. Diff / Review 頁
+6. 執行結果 / Log 頁
+
+## 1. Mapping 列表頁
+
+用途：
+
+- 顯示所有規則
+- 執行手動同步
+- 快速看到排程與 review 狀態
+- 作為主要操作頁面
+
+欄位：
+
+- 規則名稱
+- 廠商 repo URL
+- 本地主目錄
+- 本地專案資料夾名稱
+- 來源 branch
+- 目標 remote tab
+- 目標 repo 名稱
+- 目標 branch
+- `Manual Only`
+- `Review Required`
+- `Allow Force Push`
+- 排程是否啟用
+- 下次執行時間
+- 最後執行狀態
+
+操作：
+
+- `編輯`
+- `查看差異`
+- `同步`
+- `查看 Log`
+- `刪除`
+- 行內 `Force Push` checkbox
+- 行內 `自動同步` checkbox
+
+同步互動：
+
+1. Mapping 建立完成後，應先顯示在列表中
+2. 若 `allowForcePush=true`，列表行內顯示 `Force Push` checkbox
+3. `自動同步` checkbox 直接對應 `schedule.enabled`
+4. `manualOnly=true` 時，`自動同步` checkbox 必須 disabled
+5. 排程執行後 UI 必須自動刷新最後結果與下次執行時間
+6. 若 `reviewRequired=true`，`同步` 前需先點 `查看差異`
+7. 若 `reviewRequired=true` 且未人工確認，`同步` 按鈕需 disabled
+8. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
+
+## 2. Mapping Modal
+
+用途：
+
+- 以 popup modal 建立或修改同步規則
+
+欄位：
+
+- 規則名稱
+- 廠商 repo URL
+- 本地主目錄
+- `選資料夾` 按鈕
+- 本地專案資料夾名稱
+- 實際 repo 路徑預覽
+- 來源 branch
+- 目標 remote tab 下拉選單
+- 目標 repo 名稱 `.git`
+- 完整目標 URL 預覽
+- 目標 branch
+- `來源與目標分支同名` checkbox
+- `啟用規則` checkbox
+- `允許 Force Push` checkbox
+- `僅允許手動同步` checkbox
+- `同步前必須 Review` checkbox
+
+互動規則：
+
+1. 勾選 `來源與目標分支同名` 時，UI 自動把 `targetBranch` 帶成 `sourceBranch`
+2. 勾選 `僅允許手動同步` 時，排程欄位需 disabled
+3. 本地主目錄應優先使用 `選資料夾`，避免手動輸入
+4. 若本地專案資料夾名稱為空，UI 可依 `vendorRepoUrl` 自動推導預設值
+5. 選取 remote tab 或輸入 repo 名稱時，UI 應即時預覽完整 target URL
+6. 儲存成功後必須寫回 `config/settings.json`
+
+## 3. Remote Tab Modal
+
+用途：
+
+- 以 popup modal 建立或修改 remote tab 模板
+
+欄位：
+
+- Remote ID
+- 頁籤名稱
+- Base URL
+- 啟用狀態
+
+互動規則：
+
+1. Remote ID 建立後不可輕易變更，避免 mapping 關聯失效
+2. 可由使用者自訂頁籤，例如 `SIT`、`UAT`
+3. Base URL 只保存共用倉庫路徑，不含最後專案名稱
+4. Mapping 建立時只需補上最後的 `project.git`
+5. 列表需支援刪除 remote
+6. 儲存成功後必須寫回 `config/settings.json`
+
+## 4. 排程設定頁
+
+用途：
+
+- 查看所有 mapping 的排程資訊
+- 快速調整是否自動同步
+
+欄位：
+
+- 規則名稱
+- 是否自動同步
+- 間隔分鐘數
+- `Manual Only`
+- 最後執行時間
+- 下次執行時間
+
+互動規則：
+
+1. `manualOnly=true` 的規則不可啟用自動同步
+2. 修改後必須立即寫回 `config/settings.json`
+3. 儲存成功後後端需重新載入 scheduler
+
+## 5. Diff / Review 頁
+
+用途：
+
+- 顯示 review-required mapping 的變更資訊
+
+欄位：
+
+- 規則名稱
+- 來源 branch
+- 目標 branch
+- Ahead commits 數量
+- Changed files 數量
+- Commit list
+- Changed files list
+
+操作：
+
+- `人工確認本次同步`
+- `返回列表`
+- `繼續同步`
+
+互動規則：
+
+1. 只有在人工確認後才可按 `繼續同步`
+2. 此確認僅對當次同步有效，不寫入主設定檔
+
+## 6. 執行結果 / Log 頁
+
+用途：
+
+- 顯示最近一次執行結果
+- 顯示 stdout / stderr / 狀態摘要
+- 顯示操作成功或失敗
+
+欄位：
+
+- Run ID
+- 規則名稱
+- 觸發來源
+- 是否 force push
+- 是否 review confirmed
+- 結果狀態
+- stdout
+- stderr
+
+## UI 資料流
+
+### 載入列表頁
+
+1. 呼叫 `GET /api/mappings`
+2. 呼叫 `GET /api/schedules`
+3. 合併畫面狀態
+
+### 修改規則
+
+1. 使用者編輯欄位
+2. 送出 `PUT /api/mappings/{id}`
+3. 成功後刷新列表
+4. UI 顯示成功或失敗訊息
+
+### 修改 remote
+
+1. 使用者編輯 remote
+2. 送出 `PUT /api/remotes/{id}`
+3. 成功後刷新 mapping 下拉選單與 remote tabs
+4. UI 顯示成功或失敗訊息
+
+### 選擇本機目錄
+
+1. 使用者在 Mapping 編輯頁點擊 `選資料夾`
+2. UI 呼叫 `POST /api/system/select-directory`
+3. 後端開啟本機資料夾選擇器
+4. 回填絕對路徑到 `localWorkspaceRoot`
+
+### 查看差異並同步
+
+1. 呼叫 `POST /api/mappings/{id}/diff`
+2. 顯示差異摘要與檔案清單
+3. 使用者人工確認
+4. 呼叫 `POST /api/mappings/{id}/sync`
+
+### 刪除
+
+1. 使用者點擊刪除按鈕
+2. UI 顯示確認視窗
+3. 送出 `DELETE /api/mappings/{id}` 或 `DELETE /api/remotes/{id}`
+4. 成功後刷新列表並顯示成功訊息
+
+## 第一版 UI 優先順序
+
+1. Mapping 列表頁
+2. Mapping 編輯頁
+3. Remote 編輯頁
+4. 排程設定頁
+5. Diff / Review 頁
+6. Log 頁
