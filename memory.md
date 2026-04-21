@@ -49,6 +49,7 @@
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 若某條 rule 從未手動同步過，首次啟用自動同步後也必須立即進入排程，不可等到第一次人工執行後才開始。
+- 專案列表需支援將同一專案底下的多條規則摺疊 / 展開，避免主畫面過長。
 
 ## 檔案結構決策
 

@@ -5,6 +5,7 @@ const state = {
   selectedDiffRuleId: null,
   diffConfirmed: false,
   rowForcePush: {},
+  collapsedProjects: {},
   autoRefreshTimer: null,
   loadingCount: 0,
 };
@@ -103,6 +104,7 @@ function renderProjects() {
 
   root.innerHTML = state.projects.map(project => {
     const rules = project.rules || [];
+    const isCollapsed = !!state.collapsedProjects[project.id];
     const ruleRows = rules.length
       ? rules.map(rule => renderRuleRow(project, rule)).join('')
       : '<tr><td colspan="6" class="empty">尚未建立同步規則</td></tr>';
@@ -111,9 +113,14 @@ function renderProjects() {
       <section class="project-card">
         <div class="project-head">
           <div>
-            <h3>${escapeHtml(project.name)}</h3>
+            <div class="project-title-row">
+              <button class="secondary collapse-toggle" onclick="toggleProjectCollapse('${escapeAttr(project.id)}')">
+                ${isCollapsed ? '展開規則' : '收合規則'}
+              </button>
+              <h3>${escapeHtml(project.name)}</h3>
+              <span class="tag">${rules.length} 條規則</span>
+            </div>
             <div class="project-meta">${escapeHtml(project.vendorRepoUrl)}</div>
-            <div class="project-meta">${escapeHtml(project.localRepoPath || '')}</div>
           </div>
           <div class="inline-actions">
             <button class="secondary" onclick="editProject('${escapeAttr(project.id)}')">編輯專案</button>
@@ -121,22 +128,29 @@ function renderProjects() {
             <button class="secondary" onclick="deleteProject('${escapeAttr(project.id)}')">刪除專案</button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>規則</th>
-              <th>來源 / 目標</th>
-              <th>Remote</th>
-              <th>最後結果</th>
-              <th>下次排程</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>${ruleRows}</tbody>
-        </table>
+        <div class="${isCollapsed ? 'project-rules hidden' : 'project-rules'}">
+          <table>
+            <thead>
+              <tr>
+                <th>規則</th>
+                <th>來源 / 目標</th>
+                <th>Remote</th>
+                <th>最後結果</th>
+                <th>下次排程</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>${ruleRows}</tbody>
+          </table>
+        </div>
       </section>
     `;
   }).join('');
+}
+
+function toggleProjectCollapse(projectId) {
+  state.collapsedProjects[projectId] = !state.collapsedProjects[projectId];
+  renderProjects();
 }
 
 function renderRuleRow(project, rule) {
@@ -784,6 +798,7 @@ updateLocalRepoPathPreview();
 window.editProject = editProject;
 window.newRule = newRule;
 window.editRule = editRule;
+window.toggleProjectCollapse = toggleProjectCollapse;
 window.editRemote = editRemote;
 window.showDiff = showDiff;
 window.runSync = runSync;

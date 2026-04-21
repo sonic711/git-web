@@ -323,9 +323,25 @@ th {
   margin: 0 0 6px;
 }
 
+.project-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.collapse-toggle {
+  padding: 6px 10px;
+}
+
 .project-meta {
   color: var(--muted);
   font-size: 14px;
+}
+
+.project-rules {
+  margin-top: 8px;
 }
 
 .row-controls {
