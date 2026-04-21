@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.swing.JFileChooser;
 import javax.swing.UIManager;
@@ -32,6 +33,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private final SchedulerService schedulerService;
     private final Path staticDir;
     private final Map<String, ReentrantLock> repoLocks = new ConcurrentHashMap<>();
+    private final ExecutorService scheduledSyncExecutor = Executors.newCachedThreadPool();
     private HttpServer server;
 
     AppServer(ConfigService configService, RuntimeStateService runtimeStateService, GitService gitService, LogService logService,
@@ -68,15 +70,19 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             server.stop(0);
         }
         schedulerService.stop();
+        scheduledSyncExecutor.shutdownNow();
     }
 
     @Override
     public void runScheduledSync(String ruleId) {
-        try {
-            sync(ruleId, false, false, "schedule");
-        } catch (Exception exception) {
-            exception.printStackTrace();
-        }
+        scheduledSyncExecutor.submit(() -> {
+            try {
+                runtimeStateService.markRunning(ruleId, true);
+                sync(ruleId, false, false, "schedule");
+            } catch (Exception exception) {
+                exception.printStackTrace();
+            }
+        });
     }
 
     private void handleSystem(HttpExchange exchange) throws IOException {

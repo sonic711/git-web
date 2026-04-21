@@ -50,6 +50,7 @@
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 若某條 rule 從未手動同步過，首次啟用自動同步後也必須立即進入排程，不可等到第一次人工執行後才開始。
 - 專案列表需支援將同一專案底下的多條規則摺疊 / 展開，避免主畫面過長。
+- 自動同步需允許不同本地 repo 的專案並行執行；只有限制同一本地 repo 的規則需排隊。
 
 ## 檔案結構決策
 
@@ -145,3 +146,4 @@
 - UI 改為專案視角：先建立專案，再在專案底下建立多條同步規則。
 - repo 改為只追蹤 `config/settings.example.json`，本機 `config/settings.json` 已從 git index 移除。
 - 修正首次啟用自動同步但尚未手動同步過的 rule 不會執行的問題；scheduler 現在會將第一次 `nextRunAt` 設為當下時間。
+- 修正自動同步在不同專案間仍被串行化的問題；排程器現在只負責觸發，實際同步交由背景 worker 執行，不同 repo 可並行。
