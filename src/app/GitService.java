@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,10 +67,6 @@ final class GitService {
             targetExists
                 ? List.of("git", "diff", "--name-status", "--find-renames", targetRef, sourceRef)
                 : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", "--find-renames", sourceRef));
-        GitCommandResult patchResult = runChecked(repoPath,
-            List.of("git", "diff", "--no-color", "--find-renames", "--unified=3", targetExists ? targetRef : EMPTY_TREE_HASH,
-                sourceRef));
-        Map<String, String> patchByPath = splitPatchByFile(patchResult.stdout);
 
         List<Object> commitList = new ArrayList<>();
         String[] commitLines = commits.stdout.strip().isEmpty() ? new String[0] : commits.stdout.strip().split("\\R");
@@ -96,7 +91,6 @@ final class GitService {
             fileItem.put("path", path);
             fileItem.put("oldPath", oldPath);
             fileItem.put("displayPath", oldPath != null ? oldPath + " -> " + path : path);
-            fileItem.put("patch", patchForFile(patchByPath, oldPath, path));
             changedFileList.add(fileItem);
         }
 
@@ -117,6 +111,42 @@ final class GitService {
         response.put("summary", summary);
         response.put("commits", commitList);
         response.put("files", changedFileList);
+        return response;
+    }
+
+    Map<String, Object> diffFile(AppConfig config, ProjectConfig project, RuleConfig rule, String path, String oldPath)
+        throws IOException, InterruptedException {
+        ensureRepoReady(config, project);
+        ensureTargetRemote(config, project, rule);
+        Path repoPath = project.localRepoPath(config);
+        String internalRemote = internalRemoteName(rule.id);
+        fetchOrigin(repoPath);
+        runChecked(repoPath, List.of("git", "fetch", internalRemote, rule.targetBranch));
+
+        String sourceRef = originRef(rule);
+        String targetRef = internalRemote + "/" + rule.targetBranch;
+        boolean targetExists = branchExists(repoPath, targetRef);
+
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.add("diff");
+        command.add("--no-color");
+        command.add("--find-renames");
+        command.add("--unified=3");
+        command.add(targetExists ? targetRef : EMPTY_TREE_HASH);
+        command.add(sourceRef);
+        command.add("--");
+        if (oldPath != null && !oldPath.isBlank() && !oldPath.equals(path)) {
+            command.add(oldPath);
+        }
+        command.add(path);
+
+        GitCommandResult patch = runChecked(repoPath, command);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("ruleId", rule.id);
+        response.put("path", path);
+        response.put("oldPath", oldPath);
+        response.put("patch", patch.stdout);
         return response;
     }
 
@@ -245,67 +275,6 @@ final class GitService {
             return "M";
         }
         return String.valueOf(statusCode.charAt(0));
-    }
-
-    private String patchForFile(Map<String, String> patchByPath, String oldPath, String path) {
-        String patch = patchByPath.get(path);
-        if (patch == null && oldPath != null && !oldPath.isBlank()) {
-            patch = patchByPath.get(oldPath);
-        }
-        return patch == null ? "" : patch;
-    }
-
-    private Map<String, String> splitPatchByFile(String patchText) {
-        Map<String, String> patchByPath = new HashMap<>();
-        if (patchText == null || patchText.isBlank()) {
-            return patchByPath;
-        }
-
-        String[] lines = patchText.replace("\r", "").split("\n");
-        StringBuilder block = null;
-        String oldPath = null;
-        String newPath = null;
-
-        for (String line : lines) {
-            if (line.startsWith("diff --git ")) {
-                storePatchBlock(patchByPath, block, oldPath, newPath);
-                block = new StringBuilder();
-                oldPath = extractDiffPath(line, true);
-                newPath = extractDiffPath(line, false);
-            }
-            if (block == null) {
-                block = new StringBuilder();
-            }
-            block.append(line).append('\n');
-        }
-        storePatchBlock(patchByPath, block, oldPath, newPath);
-        return patchByPath;
-    }
-
-    private void storePatchBlock(Map<String, String> patchByPath, StringBuilder block, String oldPath, String newPath) {
-        if (block == null || block.length() == 0) {
-            return;
-        }
-        String patch = block.toString();
-        if (newPath != null && !newPath.isBlank()) {
-            patchByPath.put(newPath, patch);
-        }
-        if (oldPath != null && !oldPath.isBlank()) {
-            patchByPath.putIfAbsent(oldPath, patch);
-        }
-    }
-
-    private String extractDiffPath(String header, boolean oldPath) {
-        String prefix = "diff --git a/";
-        if (!header.startsWith(prefix)) {
-            return null;
-        }
-        String rest = header.substring(prefix.length());
-        int separator = rest.indexOf(" b/");
-        if (separator < 0) {
-            return null;
-        }
-        return oldPath ? rest.substring(0, separator) : rest.substring(separator + 3);
     }
 
     static final class SyncResult {

@@ -234,6 +234,14 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     HttpUtil.sendJson(exchange, 200, gitService.diff(configService.getConfig(), selection.project, selection.rule));
                     return;
                 }
+                if ("diff-file".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
+                    Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                    String filePath = Models.stringValue(body.get("path"));
+                    String oldPath = Models.nullableString(body.get("oldPath"));
+                    HttpUtil.sendJson(exchange, 200,
+                        gitService.diffFile(configService.getConfig(), selection.project, selection.rule, filePath, oldPath));
+                    return;
+                }
                 if ("sync".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                     boolean forcePush = Models.booleanValue(body.getOrDefault("forcePush", Boolean.FALSE));

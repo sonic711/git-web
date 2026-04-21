@@ -1,7 +1,8 @@
 const diffState = {
   ruleId: '',
   diff: null,
-  selectedFilePath: null,
+  selectedFileIndex: -1,
+  patchCache: {},
   confirmed: false,
   loadingCount: 0,
 };
@@ -83,7 +84,8 @@ async function loadDiff() {
     );
     diffState.diff = diff;
     diffState.confirmed = false;
-    diffState.selectedFilePath = diff.files?.[0]?.path || null;
+    diffState.selectedFileIndex = -1;
+    diffState.patchCache = {};
     render();
     showToast('差異已載入', 'success');
   } catch (error) {
@@ -130,10 +132,10 @@ function renderFileList() {
     root.innerHTML = '<div class="viewer empty">沒有檔案差異</div>';
     return;
   }
-  root.innerHTML = files.map(file => `
+  root.innerHTML = files.map((file, index) => `
     <button type="button"
-      class="${file.path === diffState.selectedFilePath ? 'diff-file-item active' : 'diff-file-item'}"
-      onclick="selectDiffFile('${escapeHtml(file.path)}')">
+      class="${index === diffState.selectedFileIndex ? 'diff-file-item active' : 'diff-file-item'}"
+      onclick="selectDiffFile(${index})">
       <span class="diff-file-status ${statusClass(file.status)}">${escapeHtml(file.status)}</span>
       <span class="diff-file-path">${escapeHtml(file.displayPath || file.path)}</span>
     </button>
@@ -142,16 +144,21 @@ function renderFileList() {
 
 function renderPatch() {
   const files = diffState.diff?.files || [];
-  const selected = files.find(file => file.path === diffState.selectedFilePath) || files[0];
+  const selected = diffState.selectedFileIndex >= 0 ? files[diffState.selectedFileIndex] : null;
   const title = document.getElementById('diffFileTitle');
   const root = document.getElementById('diffPatchView');
   if (!selected) {
     title.textContent = '請從左側選擇檔案';
-    root.textContent = '沒有可顯示的差異';
+    root.textContent = '尚未載入檔案差異';
     return;
   }
   title.textContent = selected.displayPath || selected.path;
-  const lines = String(selected.patch || '').replace(/\r/g, '').split('\n');
+  const cachedPatch = diffState.patchCache[fileKey(selected)];
+  if (cachedPatch == null) {
+    root.textContent = '載入檔案差異中...';
+    return;
+  }
+  const lines = String(cachedPatch || '').replace(/\r/g, '').split('\n');
   root.innerHTML = lines.map(line => {
     const escaped = escapeHtml(line || ' ');
     return `<div class="diff-line ${lineClass(line)}"><code>${escaped}</code></div>`;
@@ -187,10 +194,39 @@ function lineClass(line) {
   return 'diff-line-context';
 }
 
-function selectDiffFile(path) {
-  diffState.selectedFilePath = path;
+function fileKey(file) {
+  return `${file.oldPath || ''}=>${file.path || ''}`;
+}
+
+async function selectDiffFile(index) {
+  diffState.selectedFileIndex = index;
   renderFileList();
   renderPatch();
+  const file = diffState.diff?.files?.[index];
+  if (!file) {
+    return;
+  }
+  const key = fileKey(file);
+  if (Object.prototype.hasOwnProperty.call(diffState.patchCache, key)) {
+    return;
+  }
+  try {
+    const data = await withLoading('載入檔案差異中...', () =>
+      api(`/api/rules/${diffState.ruleId}/diff-file`, {
+        method: 'POST',
+        body: JSON.stringify({
+          path: file.path,
+          oldPath: file.oldPath,
+        }),
+      })
+    );
+    diffState.patchCache[key] = data.patch || '';
+    renderPatch();
+  } catch (error) {
+    diffState.patchCache[key] = `ERROR: ${error.message}`;
+    renderPatch();
+    showToast(error.message, 'error');
+  }
 }
 
 function confirmReview() {
