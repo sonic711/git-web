@@ -59,6 +59,7 @@
 6. 若 `reviewRequired=true`，`同步` 前需先點 `查看差異`
 7. 若 `reviewRequired=true` 且未人工確認，`同步` 按鈕需 disabled
 8. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
+9. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
 
 ## 2. Mapping Modal
 

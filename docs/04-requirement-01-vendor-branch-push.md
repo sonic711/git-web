@@ -63,7 +63,8 @@
   "id": "map-sit",
   "name": "Vendor SIT to Target A SIT",
   "vendorRepoUrl": "https://vendor.example.com/project.git",
-  "localRepoPath": "D:/git/vendor-project",
+  "localWorkspaceRoot": "D:/git-workspace",
+  "localProjectName": "vendor-project",
   "sourceBranch": "SIT",
   "targetRemoteId": "targetA",
   "targetRepoName": "project-a.git",
@@ -129,17 +130,19 @@
 1. 讀取 mapping 設定。
 2. 讀取對應 remote 設定。
 3. 驗證 mapping 為啟用狀態。
-4. 檢查 `localRepoPath` 是否存在。
+4. 檢查實際 repo 路徑是否存在。
 5. 若不存在，從 `vendorRepoUrl` clone。
 6. 若存在，驗證該目錄是有效 Git repo。
 7. 驗證該 repo 的來源與 `vendorRepoUrl` 相符。
-8. 執行 `git fetch --all --prune`。
-9. 驗證 `sourceBranch` 存在。
-10. 以 `remote.baseUrl + mapping.targetRepoName` 組出完整目標 remote URL。
-11. 建立或更新目標 remote。
-12. 若 mapping 設定為 `reviewRequired=true`，先產出差異並等待人工確認。
-13. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
-14. 記錄結果並回傳 UI。
+8. 執行 `git fetch origin --prune`。
+9. 驗證 `origin/<sourceBranch>` 存在。
+10. 將本地 `sourceBranch` 強制對齊 `origin/<sourceBranch>`，避免廠商 force push 後本地歷程偏移。
+11. 執行 `git pull --ff-only origin <sourceBranch>`。
+12. 以 `remote.baseUrl + mapping.targetRepoName` 組出完整目標 remote URL。
+13. 建立或更新目標 remote。
+14. 若 mapping 設定為 `reviewRequired=true`，先產出差異並等待人工確認。
+15. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
+16. 記錄結果並回傳 UI。
 
 ## Review Gate 流程
 
@@ -157,8 +160,11 @@
 
 ```bash
 git clone <vendorRepoUrl> <localRepoPath>
-git -C <localRepoPath> fetch --all --prune
-git -C <localRepoPath> rev-parse --verify <sourceBranch>
+git -C <localRepoPath> fetch origin --prune
+git -C <localRepoPath> rev-parse --verify refs/remotes/origin/<sourceBranch>
+git -C <localRepoPath> checkout -B <sourceBranch> origin/<sourceBranch>
+git -C <localRepoPath> reset --hard refs/remotes/origin/<sourceBranch>
+git -C <localRepoPath> pull --ff-only origin <sourceBranch>
 git -C <localRepoPath> remote add <generatedTargetRemoteName> <targetUrl>
 git -C <localRepoPath> remote set-url <generatedTargetRemoteName> <targetUrl>
 git -C <localRepoPath> push <generatedTargetRemoteName> <sourceBranch>:refs/heads/<targetBranch>
@@ -172,17 +178,18 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 同步前至少驗證以下條件：
 
 1. `vendorRepoUrl` 不可為空。
-2. `localRepoPath` 不可為空。
-3. `sourceBranch` 不可為空。
-4. `targetRemoteId` 必須存在。
-5. `targetRepoName` 不可為空，且第一版要求以 `.git` 結尾。
-6. `targetBranch` 不可為空。
-7. mapping 必須為啟用狀態。
-8. 若本機目錄已存在，必須是有效 Git repo。
-9. 若本機目錄已存在，repo 來源必須與 `vendorRepoUrl` 相符。
-10. 若 `forcePush=true`，mapping 必須允許 force push。
-11. 若 `manualOnly=true`，不得由排程觸發。
-12. 若 `reviewRequired=true`，同步請求必須附帶人工確認狀態。
+2. `localWorkspaceRoot` 不可為空。
+3. `localProjectName` 不可為空。
+4. `sourceBranch` 不可為空。
+5. `targetRemoteId` 必須存在。
+6. `targetRepoName` 不可為空，且第一版要求以 `.git` 結尾。
+7. `targetBranch` 不可為空。
+8. mapping 必須為啟用狀態。
+9. 若本機目錄已存在，必須是有效 Git repo。
+10. 若本機目錄已存在，repo 來源必須與 `vendorRepoUrl` 相符。
+11. 若 `forcePush=true`，mapping 必須允許 force push。
+12. 若 `manualOnly=true`，不得由排程觸發。
+13. 若 `reviewRequired=true`，同步請求必須附帶人工確認狀態。
 
 ## 錯誤情境
 

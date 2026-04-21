@@ -113,7 +113,8 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
       "id": "map-sit",
       "name": "Vendor SIT to Target A SIT",
       "vendorRepoUrl": "https://vendor.example.com/project.git",
-      "localRepoPath": "D:/git/vendor-project",
+      "localWorkspaceRoot": "D:/git-workspace",
+      "localProjectName": "vendor-project",
       "sourceBranch": "SIT",
       "targetRemoteId": "targetA",
       "targetRepoName": "project-a.git",
@@ -251,14 +252,15 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 
 同步時建議使用以下流程：
 
-1. 若 `localRepoPath` 不存在，執行 clone。
+1. 若實際 repo 路徑不存在，執行 clone。
 2. 若存在，驗證為 Git repo。
 3. 驗證既有 repo 的 `origin` URL 是否與 `vendorRepoUrl` 一致。
-4. 執行 `git fetch --all --prune`。
-5. 驗證來源 branch 存在。
-6. 建立或更新系統管理的 target remote。
-7. 若 `reviewRequired=true`，先要求 UI 透過 diff API 顯示差異並人工確認。
-8. 執行 `git push` 或 `git push -f`。
+4. 執行 `git fetch origin --prune`。
+5. 驗證 `origin/<sourceBranch>` 存在。
+6. 將本地來源分支強制對齊 `origin/<sourceBranch>`，再執行 `git pull --ff-only origin <sourceBranch>`。
+7. 建立或更新系統管理的 target remote。
+8. 若 `reviewRequired=true`，先要求 UI 透過 diff API 顯示差異並人工確認。
+9. 執行 `git push` 或 `git push -f`。
 
 ## 排程執行策略
 
@@ -275,12 +277,12 @@ Java 服務需內建背景排程器：
 
 系統內部為目標 remote 產生固定名稱：
 
-- `sync_target_<targetRemoteId>`
+- `sync_target_<mappingId>`
 
 例如：
 
-- `sync_target_targetA`
-- `sync_target_targetB`
+- `sync_target_map-sit`
+- `sync_target_map-uat`
 
 這可避免與 repo 原有 remote 名稱衝突。
 

@@ -44,6 +44,8 @@
 - 需支援 Windows 啟動腳本，至少提供 `run.bat` 與 `run.ps1`。
 - Mapping 的本地路徑模型已改成 `localWorkspaceRoot + localProjectName`，不再直接輸入單一 repo 路徑。
 - 同一本地專案可對應多筆 mapping，且每筆 mapping 使用獨立內部 remote 名稱。
+- 同步前需先將本地 `sourceBranch` 強制對齊廠商 `origin/<sourceBranch>`，再執行 `git pull --ff-only`。
+- 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
 
 ## 檔案結構決策
 
@@ -134,3 +136,5 @@
 - 補上 Windows 啟動腳本 `run.bat` 與 `run.ps1`。
 - 將本地 repo 設定改為「主目錄 + 專案資料夾名稱」模式，並保留舊 `localRepoPath` 相容轉換。
 - 同一本地 repo 新增執行鎖，避免多筆 mapping 同時操作互相干擾。
+- 同步流程改為先對齊 vendor branch，再 pull，再 push，避免廠商 force push 造成歷程偏移。
+- 前端新增全畫面 loading overlay，覆蓋所有主要按鈕操作。

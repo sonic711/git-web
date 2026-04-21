@@ -115,8 +115,7 @@ final class GitService {
         String internalRemote = internalRemoteName(mapping.id);
 
         List<GitCommandResult> results = new ArrayList<>();
-        results.add(runChecked(mapping.localRepoPath(), List.of("git", "fetch", "--all", "--prune")));
-        results.add(runChecked(mapping.localRepoPath(), List.of("git", "rev-parse", "--verify", mapping.sourceBranch)));
+        syncVendorBranch(mapping, results);
 
         List<String> pushCommand = new ArrayList<>();
         pushCommand.add("git");
@@ -129,6 +128,17 @@ final class GitService {
         results.add(runChecked(mapping.localRepoPath(), pushCommand));
 
         return new SyncResult(results);
+    }
+
+    private void syncVendorBranch(MappingConfig mapping, List<GitCommandResult> results) throws IOException, InterruptedException {
+        Path repoPath = mapping.localRepoPath();
+        String originRef = "refs/remotes/origin/" + mapping.sourceBranch;
+        results.add(runChecked(repoPath, List.of("git", "fetch", "origin", "--prune")));
+        results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
+        // Force the local source branch to match the vendor branch before pulling, to absorb vendor-side force pushes.
+        results.add(runChecked(repoPath, List.of("git", "checkout", "-B", mapping.sourceBranch, "origin/" + mapping.sourceBranch)));
+        results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
+        results.add(runChecked(repoPath, List.of("git", "pull", "--ff-only", "origin", mapping.sourceBranch)));
     }
 
     private void ensureRepoReady(MappingConfig mapping) throws IOException, InterruptedException {

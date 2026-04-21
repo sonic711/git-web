@@ -6,6 +6,7 @@ const state = {
   diffConfirmed: false,
   rowForcePush: {},
   autoRefreshTimer: null,
+  loadingCount: 0,
 };
 
 async function api(path, options = {}) {
@@ -27,6 +28,29 @@ function showToast(message, type = 'success') {
   setTimeout(() => {
     toast.className = 'toast hidden';
   }, 3500);
+}
+
+function showLoading(message = '作業中...') {
+  state.loadingCount += 1;
+  document.getElementById('loadingMessage').textContent = message;
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+  state.loadingCount = Math.max(0, state.loadingCount - 1);
+  if (state.loadingCount === 0) {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    document.getElementById('loadingMessage').textContent = '作業中...';
+  }
+}
+
+async function withLoading(message, action) {
+  showLoading(message);
+  try {
+    return await action();
+  } finally {
+    hideLoading();
+  }
 }
 
 function mappingById(id) {
@@ -367,22 +391,31 @@ function syncMappingFormRules() {
   updateTargetUrlPreview();
 }
 
-async function loadAll() {
-  const [mappings, remotes] = await Promise.all([
-    api('/api/mappings'),
-    api('/api/remotes'),
-  ]);
-  state.mappings = mappings;
-  state.remotes = remotes;
-  if (state.selectedRemoteTab !== 'all' && !state.remotes.some(remote => remote.id === state.selectedRemoteTab)) {
-    state.selectedRemoteTab = 'all';
+async function loadAll(options = {}) {
+  const silent = !!options.silent;
+  const run = async () => {
+    const [mappings, remotes] = await Promise.all([
+      api('/api/mappings'),
+      api('/api/remotes'),
+    ]);
+    state.mappings = mappings;
+    state.remotes = remotes;
+    if (state.selectedRemoteTab !== 'all' && !state.remotes.some(remote => remote.id === state.selectedRemoteTab)) {
+      state.selectedRemoteTab = 'all';
+    }
+    renderTables();
+  };
+  if (silent) {
+    return run();
   }
-  renderTables();
+  return withLoading('重新載入資料中...', run);
 }
 
 async function pickDirectory() {
   try {
-    const result = await api('/api/system/select-directory', { method: 'POST', body: '{}' });
+    const result = await withLoading('開啟資料夾選擇器...', () =>
+      api('/api/system/select-directory', { method: 'POST', body: '{}' })
+    );
     document.getElementById('localWorkspaceRoot').value = result.path || '';
     updateLocalRepoPathPreview();
   } catch (error) {
@@ -415,8 +448,10 @@ async function saveMapping(event) {
         intervalMinutes: Number(document.getElementById('intervalMinutes').value || 30),
       },
     };
-    await api(`/api/mappings/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-    await loadAll();
+    await withLoading('儲存 Mapping 中...', () =>
+      api(`/api/mappings/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    );
+    await loadAll({ silent: true });
     closeModal('mappingModal');
     showToast('Mapping 已儲存', 'success');
   } catch (error) {
@@ -435,13 +470,17 @@ async function saveRemote(event) {
       enabled: document.getElementById('remoteEnabled').checked,
     };
     if (originalId) {
-      await api(`/api/remotes/${originalId}`, { method: 'PUT', body: JSON.stringify(payload) });
+      await withLoading('儲存 Remote Tab 中...', () =>
+        api(`/api/remotes/${originalId}`, { method: 'PUT', body: JSON.stringify(payload) })
+      );
       state.selectedRemoteTab = payload.id;
     } else {
-      await api('/api/remotes', { method: 'POST', body: JSON.stringify(payload) });
+      await withLoading('建立 Remote Tab 中...', () =>
+        api('/api/remotes', { method: 'POST', body: JSON.stringify(payload) })
+      );
       state.selectedRemoteTab = payload.id;
     }
-    await loadAll();
+    await loadAll({ silent: true });
     closeModal('remoteModal');
     showToast('Remote Tab 已儲存', 'success');
   } catch (error) {
@@ -456,15 +495,17 @@ async function toggleAutoSync(id, enabled) {
     if (mapping.manualOnly && enabled) {
       throw new Error('Manual Only 規則不可啟用自動同步');
     }
-    await api(`/api/mappings/${id}/schedule`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        enabled,
-        type: 'fixed-interval',
-        intervalMinutes: mapping.schedule?.intervalMinutes || 30,
-      }),
-    });
-    await loadAll();
+    await withLoading(`正在${enabled ? '啟用' : '停用'}自動同步...`, () =>
+      api(`/api/mappings/${id}/schedule`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled,
+          type: 'fixed-interval',
+          intervalMinutes: mapping.schedule?.intervalMinutes || 30,
+        }),
+      })
+    );
+    await loadAll({ silent: true });
     showToast(`自動同步已${enabled ? '啟用' : '停用'}`, 'success');
   } catch (error) {
     showToast(error.message, 'error');
@@ -477,7 +518,9 @@ function setRowForcePush(id, checked) {
 
 async function validateMapping(id) {
   try {
-    const data = await api(`/api/mappings/${id}/validate`, { method: 'POST' });
+    const data = await withLoading('驗證 Mapping 中...', () =>
+      api(`/api/mappings/${id}/validate`, { method: 'POST' })
+    );
     document.getElementById('logView').textContent = JSON.stringify(data, null, 2);
     showToast(data.ok ? '驗證成功' : '驗證失敗', data.ok ? 'success' : 'error');
   } catch (error) {
@@ -488,7 +531,9 @@ async function validateMapping(id) {
 async function showDiff(id) {
   try {
     const mapping = mappingById(id);
-    const data = await api(`/api/mappings/${id}/diff`, { method: 'POST' });
+    const data = await withLoading('載入差異中...', () =>
+      api(`/api/mappings/${id}/diff`, { method: 'POST' })
+    );
     state.selectedDiffMappingId = id;
     state.diffConfirmed = false;
     const commitLines = data.commits.map(item =>
@@ -527,12 +572,14 @@ async function runSync(id) {
     if (mapping.reviewRequired && !reviewConfirmed) {
       throw new Error('這筆規則需要先查看差異並完成人工確認');
     }
-    const result = await api(`/api/mappings/${id}/sync`, {
-      method: 'POST',
-      body: JSON.stringify({ forcePush, reviewConfirmed }),
-    });
+    const result = await withLoading('同步中，請稍候...', () =>
+      api(`/api/mappings/${id}/sync`, {
+        method: 'POST',
+        body: JSON.stringify({ forcePush, reviewConfirmed }),
+      })
+    );
     document.getElementById('logView').textContent = JSON.stringify(result, null, 2);
-    await loadAll();
+    await loadAll({ silent: true });
     if (result.runId) {
       await loadLog(result.runId);
     }
@@ -548,13 +595,15 @@ async function deleteMapping(id) {
     if (!confirm(`確定要刪除 Mapping ${mapping?.name || id} 嗎？`)) {
       return;
     }
-    await api(`/api/mappings/${id}`, { method: 'DELETE' });
+    await withLoading('刪除 Mapping 中...', () =>
+      api(`/api/mappings/${id}`, { method: 'DELETE' })
+    );
     if (state.selectedDiffMappingId === id) {
       state.selectedDiffMappingId = null;
       state.diffConfirmed = false;
       document.getElementById('diffView').textContent = '尚未載入差異';
     }
-    await loadAll();
+    await loadAll({ silent: true });
     showToast('Mapping 已刪除', 'success');
   } catch (error) {
     showToast(error.message, 'error');
@@ -566,11 +615,13 @@ async function deleteRemote(id) {
     if (!confirm(`確定要刪除 Remote Tab ${id} 嗎？`)) {
       return;
     }
-    await api(`/api/remotes/${id}`, { method: 'DELETE' });
+    await withLoading('刪除 Remote Tab 中...', () =>
+      api(`/api/remotes/${id}`, { method: 'DELETE' })
+    );
     if (state.selectedRemoteTab === id) {
       state.selectedRemoteTab = 'all';
     }
-    await loadAll();
+    await loadAll({ silent: true });
     showToast('Remote Tab 已刪除', 'success');
   } catch (error) {
     showToast(error.message, 'error');
@@ -588,13 +639,13 @@ function startAutoRefresh() {
     clearInterval(state.autoRefreshTimer);
   }
   state.autoRefreshTimer = setInterval(() => {
-    loadAll().catch(error => showToast(error.message, 'error'));
+    loadAll({ silent: true }).catch(error => showToast(error.message, 'error'));
   }, 10000);
 }
 
 async function loadLog(runId) {
   try {
-    const log = await api(`/api/logs/${runId}`);
+    const log = await withLoading('載入執行紀錄中...', () => api(`/api/logs/${runId}`));
     document.getElementById('logView').textContent = log.content || '(empty log)';
   } catch (error) {
     showToast(error.message, 'error');
@@ -634,7 +685,7 @@ document.querySelectorAll('[data-close-modal]').forEach(button => {
   button.addEventListener('click', () => closeModal(button.dataset.closeModal));
 });
 
-loadAll().catch(error => {
+loadAll({ silent: true }).catch(error => {
   document.getElementById('logView').textContent = error.message;
   showToast(error.message, 'error');
 });

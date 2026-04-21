@@ -12,26 +12,28 @@
 使用者建立一筆規則：
 
 - 廠商 repo：`https://vendor.example.com/project.git`
-- 本機目錄：`D:/git/vendor-project`
+- 本地主目錄：`D:/git-workspace`
+- 本地專案資料夾：`vendor-project`
 - 來源 branch：`SIT`
 - 目標 remote：`git@target.example.com:team/project.git`
 - 目標 branch：`SIT`
 
 執行同步時：
 
-1. 系統檢查本機目錄是否存在有效 Git repo。
+1. 系統檢查實際 repo 路徑是否存在有效 Git repo。
 2. 若不存在，先從廠商 repo clone 到指定目錄。
-3. clone 完成後 fetch 最新狀態。
+3. clone 完成後先對齊廠商來源分支，再 pull 最新狀態。
 4. 將 `SIT` 推送到目標 remote 的 `SIT`。
 
 ## 情境 2：目錄已存在，直接 fetch 後同步
 
-若本機目錄已是有效 Git repo，系統應：
+若實際 repo 路徑已是有效 Git repo，系統應：
 
 1. 驗證該 repo 與設定相符。
-2. 執行 `fetch --all --prune`。
-3. 驗證來源 branch 存在。
-4. 推送到目標 remote / branch。
+2. 執行 `fetch origin --prune`。
+3. 將本地來源分支強制對齊 `origin/<sourceBranch>`。
+4. 執行 `git pull --ff-only origin <sourceBranch>`。
+5. 推送到目標 remote / branch。
 
 ## 情境 3：使用 force push
 
@@ -104,11 +106,11 @@
 2. 使用者決定本次是否勾選 `Force Push`。
 3. UI 呼叫本機 Java API。
 4. Java API 載入設定檔。
-5. 系統檢查本機目錄是否已有 repo。
+5. 系統檢查實際 repo 路徑是否已有 repo。
 6. 若沒有 repo，執行 clone。
 7. 若已有 repo，驗證該目錄為有效 Git repo。
-8. 執行 `git fetch --all --prune`。
-9. 驗證來源 branch 存在。
+8. 執行 `git fetch origin --prune`。
+9. 將本地來源分支對齊 `origin/<sourceBranch>`，並執行 `git pull --ff-only origin <sourceBranch>`。
 10. 建立或更新目標 remote。
 11. 依 checkbox 狀態決定一般 push 或 `push -f`。
 12. 若 mapping 啟用 review gate，先檢查是否已完成人工確認。

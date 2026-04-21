@@ -81,6 +81,38 @@ pre {
   border-color: #d18b78;
 }
 
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  background: rgba(33, 24, 18, 0.32);
+  backdrop-filter: blur(2px);
+}
+
+.loading-card {
+  min-width: 220px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 242, 0.96);
+  box-shadow: 0 24px 48px var(--shadow);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: var(--ink);
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 4px solid #eadfce;
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+
 .hidden {
   display: none;
 }
@@ -331,6 +363,12 @@ th {
   justify-content: end;
   gap: 10px;
   margin-top: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 900px) {
