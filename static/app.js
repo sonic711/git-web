@@ -632,39 +632,28 @@ async function validateRule(ruleId) {
 
 async function showDiff(ruleId) {
   try {
-    const selection = ruleSelection(ruleId);
-    const data = await withLoading('載入差異中...', () =>
-      api(`/api/rules/${ruleId}/diff`, { method: 'POST' })
-    );
     state.selectedDiffRuleId = ruleId;
     state.diffConfirmed = false;
-    const commitLines = data.commits.map(item =>
-      `<li><code>${escapeHtml(item.id)}</code> ${escapeHtml(item.title)}</li>`).join('');
-    const fileLines = (data.files || []).map(item =>
-      `<li><code>${escapeHtml(item.status)}</code> ${escapeHtml(item.path)}</li>`).join('');
-    document.getElementById('diffView').innerHTML = `
-      <div class="section"><strong>Project:</strong> ${escapeHtml(data.projectName || selection?.project?.name || '-')}</div>
-      <div class="section"><strong>Rule:</strong> ${escapeHtml(data.ruleName || selection?.rule?.name || ruleId)}</div>
-      <div class="section"><strong>Source:</strong> ${escapeHtml(data.sourceBranch)} | <strong>Target:</strong> ${escapeHtml(data.targetBranch)}</div>
-      <div class="section"><strong>Remote:</strong> ${escapeHtml(data.targetRemoteName || '-')} | <strong>Repo:</strong> ${escapeHtml(data.targetRepoName || '-')}</div>
-      <div class="section"><strong>URL:</strong> ${escapeHtml(data.targetRemoteUrl || '-')}</div>
-      <div class="section"><strong>Ahead commits:</strong> ${escapeHtml(data.summary.aheadCommits)} | <strong>Changed files:</strong> ${escapeHtml(data.summary.changedFiles)}</div>
-      <div class="section"><strong>Commits</strong><ul>${commitLines || '<li>(none)</li>'}</ul></div>
-      <div class="section"><strong>Files</strong><ul>${fileLines || '<li>(none)</li>'}</ul></div>
-      <div class="section"><button onclick="confirmDiffReview('${escapeAttr(ruleId)}')">人工確認本次同步</button></div>
-    `;
+    const popup = window.open(`/diff.html?ruleId=${encodeURIComponent(ruleId)}`, `diff-review-${ruleId}`,
+      'popup=yes,width=1480,height=960,resizable=yes,scrollbars=yes');
+    if (!popup) {
+      throw new Error('瀏覽器阻擋了差異視窗，請允許彈出視窗後重試');
+    }
+    document.getElementById('diffView').textContent = '差異已在新視窗開啟，請在新視窗完成檢視與人工確認。';
     renderProjects();
-    showToast('差異已載入', 'success');
+    showToast('差異視窗已開啟', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
 }
 
-function confirmDiffReview(ruleId) {
+function confirmDiffReview(ruleId, showNotice = true) {
   state.selectedDiffRuleId = ruleId;
   state.diffConfirmed = true;
   renderProjects();
-  showToast('已完成本次人工確認', 'success');
+  if (showNotice) {
+    showToast('已完成本次人工確認', 'success');
+  }
 }
 
 async function runSync(ruleId) {
@@ -826,6 +815,16 @@ document.getElementById('remoteBaseUrl').addEventListener('input', updateRemoteE
 
 document.querySelectorAll('[data-close-modal]').forEach(button => {
   button.addEventListener('click', () => closeModal(button.dataset.closeModal));
+});
+
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin) {
+    return;
+  }
+  const data = event.data || {};
+  if (data.type === 'diff-review-confirmed' && data.ruleId) {
+    confirmDiffReview(data.ruleId);
+  }
 });
 
 loadAll({ silent: true }).catch(error => {

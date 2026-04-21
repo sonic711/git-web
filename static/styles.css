@@ -428,3 +428,178 @@ th {
     padding: 12px;
   }
 }
+
+.diff-page {
+  min-height: 100vh;
+}
+
+.diff-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.diff-meta-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdf8;
+}
+
+.diff-meta-wide {
+  grid-column: 1 / -1;
+}
+
+.diff-commit-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.diff-shell {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 68vh;
+}
+
+.diff-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf8;
+  overflow: hidden;
+}
+
+.diff-sidebar-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 700;
+}
+
+.diff-file-list {
+  overflow: auto;
+}
+
+.diff-file-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #efe4d3;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.diff-file-item.active {
+  background: #f3e4d7;
+}
+
+.diff-file-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-add {
+  background: #dff1e2;
+  color: #235f2d;
+}
+
+.status-remove {
+  background: #ffe3db;
+  color: #9f2d13;
+}
+
+.status-rename {
+  background: #e7ebff;
+  color: #304f91;
+}
+
+.status-modify {
+  background: #f5ecd5;
+  color: #8a5b0d;
+}
+
+.diff-file-path {
+  word-break: break-word;
+}
+
+.diff-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-file-title {
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.diff-patch-view {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  overflow: auto;
+  white-space: pre;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.diff-line {
+  display: block;
+  padding: 0 14px;
+}
+
+.diff-line code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.diff-line-add {
+  background: #ecf8ef;
+  color: #1d5b29;
+}
+
+.diff-line-remove {
+  background: #fff0eb;
+  color: #92301b;
+}
+
+.diff-line-hunk {
+  background: #f5efe3;
+  color: #6c4a12;
+}
+
+.diff-line-meta {
+  background: #f3f0ea;
+  color: #665e54;
+}
+
+.diff-line-context {
+  background: #fff;
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .diff-meta-grid,
+  .diff-shell {
+    grid-template-columns: 1fr;
+  }
+}

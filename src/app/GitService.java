@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 final class GitService {
+    private static final String EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
     private final GitCommandRunner runner;
 
     GitService(GitCommandRunner runner) {
@@ -64,8 +65,8 @@ final class GitService {
             List.of("git", "log", "--oneline", "--no-merges", range));
         GitCommandResult files = runChecked(repoPath,
             targetExists
-                ? List.of("git", "diff", "--name-status", targetRef, sourceRef)
-                : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", sourceRef));
+                ? List.of("git", "diff", "--name-status", "--find-renames", targetRef, sourceRef)
+                : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", "--find-renames", sourceRef));
 
         List<Object> commitList = new ArrayList<>();
         String[] commitLines = commits.stdout.strip().isEmpty() ? new String[0] : commits.stdout.strip().split("\\R");
@@ -80,10 +81,17 @@ final class GitService {
         List<Object> changedFileList = new ArrayList<>();
         String[] fileLines = files.stdout.strip().isEmpty() ? new String[0] : files.stdout.strip().split("\\R");
         for (String line : fileLines) {
-            String[] parts = line.split("\\t", 2);
+            String[] parts = line.split("\\t");
+            String statusCode = parts.length > 0 ? parts[0] : "M";
+            String status = normalizeStatus(statusCode);
+            String oldPath = parts.length > 2 ? parts[1] : null;
+            String path = parts.length > 2 ? parts[2] : parts.length > 1 ? parts[1] : line;
             Map<String, Object> fileItem = new LinkedHashMap<>();
-            fileItem.put("status", parts.length > 0 ? parts[0] : "M");
-            fileItem.put("path", parts.length > 1 ? parts[1] : line);
+            fileItem.put("status", status);
+            fileItem.put("path", path);
+            fileItem.put("oldPath", oldPath);
+            fileItem.put("displayPath", oldPath != null ? oldPath + " -> " + path : path);
+            fileItem.put("patch", diffForFile(repoPath, targetExists, targetRef, sourceRef, oldPath, path));
             changedFileList.add(fileItem);
         }
 
@@ -225,6 +233,31 @@ final class GitService {
 
     private String internalRemoteName(String ruleId) {
         return "sync_target_" + ruleId;
+    }
+
+    private String normalizeStatus(String statusCode) {
+        if (statusCode == null || statusCode.isBlank()) {
+            return "M";
+        }
+        return String.valueOf(statusCode.charAt(0));
+    }
+
+    private String diffForFile(Path repoPath, boolean targetExists, String targetRef, String sourceRef, String oldPath, String path)
+        throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.add("diff");
+        command.add("--no-color");
+        command.add("--find-renames");
+        command.add("--unified=3");
+        command.add(targetExists ? targetRef : EMPTY_TREE_HASH);
+        command.add(sourceRef);
+        command.add("--");
+        if (oldPath != null && !oldPath.isBlank() && !oldPath.equals(path)) {
+            command.add(oldPath);
+        }
+        command.add(path);
+        return runChecked(repoPath, command).stdout;
     }
 
     static final class SyncResult {

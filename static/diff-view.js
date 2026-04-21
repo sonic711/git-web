@@ -1,0 +1,223 @@
+const diffState = {
+  ruleId: '',
+  diff: null,
+  selectedFilePath: null,
+  confirmed: false,
+  loadingCount: 0,
+};
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Request failed');
+  }
+  return data;
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast ${type}`;
+  setTimeout(() => {
+    toast.className = 'toast hidden';
+  }, 3500);
+}
+
+function showLoading(message = '作業中...') {
+  diffState.loadingCount += 1;
+  document.getElementById('loadingMessage').textContent = message;
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+  diffState.loadingCount = Math.max(0, diffState.loadingCount - 1);
+  if (diffState.loadingCount === 0) {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    document.getElementById('loadingMessage').textContent = '作業中...';
+  }
+}
+
+async function withLoading(message, action) {
+  showLoading(message);
+  try {
+    return await action();
+  } finally {
+    hideLoading();
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll("'", '&#39;')
+    .replaceAll('"', '&quot;');
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+async function loadDiff() {
+  try {
+    const diff = await withLoading('載入差異中...', () =>
+      api(`/api/rules/${diffState.ruleId}/diff`, { method: 'POST' })
+    );
+    diffState.diff = diff;
+    diffState.confirmed = false;
+    diffState.selectedFilePath = diff.files?.[0]?.path || null;
+    render();
+    showToast('差異已載入', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+    document.getElementById('diffPatchView').textContent = error.message;
+  }
+}
+
+function render() {
+  renderMeta();
+  renderFileList();
+  renderPatch();
+  renderConfirmButton();
+}
+
+function renderMeta() {
+  const diff = diffState.diff;
+  if (!diff) {
+    return;
+  }
+  document.getElementById('diffPageSubtitle').textContent =
+    `${diff.projectName} / ${diff.ruleName} / ${diff.sourceBranch} -> ${diff.targetBranch}`;
+  const commitItems = (diff.commits || []).map(item =>
+    `<li><code>${escapeHtml(item.id)}</code> ${escapeHtml(item.title)}</li>`
+  ).join('');
+  document.getElementById('diffMeta').innerHTML = `
+    <div class="diff-meta-item"><strong>Project</strong><span>${escapeHtml(diff.projectName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Rule</strong><span>${escapeHtml(diff.ruleName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Source</strong><span>${escapeHtml(diff.sourceBranch || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Target</strong><span>${escapeHtml(diff.targetBranch || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Remote</strong><span>${escapeHtml(diff.targetRemoteName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Repo</strong><span>${escapeHtml(diff.targetRepoName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Commits Ahead</strong><span>${escapeHtml(diff.summary?.aheadCommits ?? 0)}</span></div>
+    <div class="diff-meta-item"><strong>Changed Files</strong><span>${escapeHtml(diff.summary?.changedFiles ?? 0)}</span></div>
+    <div class="diff-meta-item diff-meta-wide"><strong>Target URL</strong><span>${escapeHtml(diff.targetRemoteUrl || '-')}</span></div>
+    <div class="diff-meta-item diff-meta-wide"><strong>Commits</strong><ul class="diff-commit-list">${commitItems || '<li>(none)</li>'}</ul></div>
+  `;
+}
+
+function renderFileList() {
+  const root = document.getElementById('diffFileList');
+  const files = diffState.diff?.files || [];
+  if (!files.length) {
+    root.innerHTML = '<div class="viewer empty">沒有檔案差異</div>';
+    return;
+  }
+  root.innerHTML = files.map(file => `
+    <button type="button"
+      class="${file.path === diffState.selectedFilePath ? 'diff-file-item active' : 'diff-file-item'}"
+      onclick="selectDiffFile('${escapeHtml(file.path)}')">
+      <span class="diff-file-status ${statusClass(file.status)}">${escapeHtml(file.status)}</span>
+      <span class="diff-file-path">${escapeHtml(file.displayPath || file.path)}</span>
+    </button>
+  `).join('');
+}
+
+function renderPatch() {
+  const files = diffState.diff?.files || [];
+  const selected = files.find(file => file.path === diffState.selectedFilePath) || files[0];
+  const title = document.getElementById('diffFileTitle');
+  const root = document.getElementById('diffPatchView');
+  if (!selected) {
+    title.textContent = '請從左側選擇檔案';
+    root.textContent = '沒有可顯示的差異';
+    return;
+  }
+  title.textContent = selected.displayPath || selected.path;
+  const lines = String(selected.patch || '').replace(/\r/g, '').split('\n');
+  root.innerHTML = lines.map(line => {
+    const escaped = escapeHtml(line || ' ');
+    return `<div class="diff-line ${lineClass(line)}"><code>${escaped}</code></div>`;
+  }).join('') || '<div class="diff-line diff-line-context"><code>(empty diff)</code></div>';
+}
+
+function renderConfirmButton() {
+  const button = document.getElementById('confirmReviewButton');
+  button.textContent = diffState.confirmed ? '已完成人工確認' : '人工確認本次同步';
+  button.disabled = diffState.confirmed;
+}
+
+function statusClass(status) {
+  if (status === 'A') return 'status-add';
+  if (status === 'D') return 'status-remove';
+  if (status === 'R') return 'status-rename';
+  return 'status-modify';
+}
+
+function lineClass(line) {
+  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') || line.startsWith('index ')) {
+    return 'diff-line-meta';
+  }
+  if (line.startsWith('@@')) {
+    return 'diff-line-hunk';
+  }
+  if (line.startsWith('+')) {
+    return 'diff-line-add';
+  }
+  if (line.startsWith('-')) {
+    return 'diff-line-remove';
+  }
+  return 'diff-line-context';
+}
+
+function selectDiffFile(path) {
+  diffState.selectedFilePath = path;
+  renderFileList();
+  renderPatch();
+}
+
+function confirmReview() {
+  if (!diffState.ruleId) {
+    return;
+  }
+  diffState.confirmed = true;
+  renderConfirmButton();
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage({
+      type: 'diff-review-confirmed',
+      ruleId: diffState.ruleId,
+    }, window.location.origin);
+  }
+  showToast('已完成人工確認，主畫面可直接同步', 'success');
+}
+
+document.getElementById('reloadDiffButton').addEventListener('click', loadDiff);
+document.getElementById('confirmReviewButton').addEventListener('click', confirmReview);
+
+const params = new URLSearchParams(window.location.search);
+diffState.ruleId = params.get('ruleId') || '';
+if (!diffState.ruleId) {
+  document.getElementById('diffPatchView').textContent = '缺少 ruleId';
+  showToast('缺少 ruleId', 'error');
+} else {
+  loadDiff();
+}
+
+window.selectDiffFile = selectDiffFile;

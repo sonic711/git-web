@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diff Review</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="diff-page">
+  <header class="hero">
+    <div>
+      <h1>Diff Review</h1>
+      <p id="diffPageSubtitle">載入差異中...</p>
+    </div>
+    <div class="inline-actions">
+      <button type="button" class="secondary" id="reloadDiffButton">重新載入</button>
+      <button type="button" id="confirmReviewButton">人工確認本次同步</button>
+    </div>
+  </header>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
+    <div class="loading-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="loadingMessage">作業中...</div>
+    </div>
+  </div>
+
+  <main class="layout">
+    <section class="panel">
+      <div id="diffMeta" class="diff-meta-grid"></div>
+    </section>
+
+    <section class="panel diff-shell">
+      <aside class="diff-sidebar">
+        <div class="diff-sidebar-head">差異檔案</div>
+        <div id="diffFileList" class="diff-file-list"></div>
+      </aside>
+      <section class="diff-content">
+        <div id="diffFileTitle" class="diff-file-title">請從左側選擇檔案</div>
+        <pre id="diffPatchView" class="diff-patch-view">尚未載入差異內容</pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="/diff-view.js"></script>
+</body>
+</html>
