@@ -60,6 +60,8 @@ final class GitService {
         String sourceRef = originRef(rule);
         String targetRef = internalRemote + "/" + rule.targetBranch;
         boolean targetExists = branchExists(repoPath, targetRef);
+        String sourceCommit = resolveRevision(repoPath, sourceRef);
+        String targetCommit = targetExists ? resolveRevision(repoPath, targetRef) : EMPTY_TREE_HASH;
         String range = targetExists ? targetRef + ".." + sourceRef : sourceRef;
         GitCommandResult commits = runChecked(repoPath,
             List.of("git", "log", "--oneline", "--no-merges", range));
@@ -108,24 +110,20 @@ final class GitService {
         response.put("targetRepoName", rule.targetRepoName);
         response.put("targetRemoteName", remote.name);
         response.put("targetRemoteUrl", targetRemoteUrl(config, rule));
+        response.put("compareBase", targetCommit);
+        response.put("compareHead", sourceCommit);
         response.put("summary", summary);
         response.put("commits", commitList);
         response.put("files", changedFileList);
         return response;
     }
 
-    Map<String, Object> diffFile(AppConfig config, ProjectConfig project, RuleConfig rule, String path, String oldPath)
+    Map<String, Object> diffFileSnapshot(AppConfig config, ProjectConfig project, String path, String oldPath,
+                                         String compareBase, String compareHead)
         throws IOException, InterruptedException {
-        ensureRepoReady(config, project);
-        ensureTargetRemote(config, project, rule);
         Path repoPath = project.localRepoPath(config);
-        String internalRemote = internalRemoteName(rule.id);
-        fetchOrigin(repoPath);
-        runChecked(repoPath, List.of("git", "fetch", internalRemote, rule.targetBranch));
-
-        String sourceRef = originRef(rule);
-        String targetRef = internalRemote + "/" + rule.targetBranch;
-        boolean targetExists = branchExists(repoPath, targetRef);
+        Models.require(Files.exists(repoPath), "Local repository does not exist");
+        Models.require(isGitRepo(repoPath), "Local path is not a git repository");
 
         List<String> command = new ArrayList<>();
         command.add("git");
@@ -133,8 +131,8 @@ final class GitService {
         command.add("--no-color");
         command.add("--find-renames");
         command.add("--unified=3");
-        command.add(targetExists ? targetRef : EMPTY_TREE_HASH);
-        command.add(sourceRef);
+        command.add(compareBase);
+        command.add(compareHead);
         command.add("--");
         if (oldPath != null && !oldPath.isBlank() && !oldPath.equals(path)) {
             command.add(oldPath);
@@ -143,7 +141,6 @@ final class GitService {
 
         GitCommandResult patch = runChecked(repoPath, command);
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("ruleId", rule.id);
         response.put("path", path);
         response.put("oldPath", oldPath);
         response.put("patch", patch.stdout);
@@ -239,6 +236,11 @@ final class GitService {
 
     private GitCommandResult fetchOrigin(Path repoPath) throws IOException, InterruptedException {
         return runChecked(repoPath, List.of("git", "fetch", "origin", "--prune"));
+    }
+
+    private String resolveRevision(Path repoPath, String revision) throws IOException, InterruptedException {
+        GitCommandResult result = runChecked(repoPath, List.of("git", "rev-parse", "--verify", revision));
+        return result.stdout.strip();
     }
 
     private String originRef(RuleConfig rule) {

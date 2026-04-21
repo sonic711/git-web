@@ -259,8 +259,15 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                     String filePath = Models.stringValue(body.get("path"));
                     String oldPath = Models.nullableString(body.get("oldPath"));
+                    Map<String, Object> summary = gitService.diff(configService.getConfig(), selection.project, selection.rule);
                     HttpUtil.sendJson(exchange, 200,
-                        gitService.diffFile(configService.getConfig(), selection.project, selection.rule, filePath, oldPath));
+                        gitService.diffFileSnapshot(
+                            configService.getConfig(),
+                            selection.project,
+                            filePath,
+                            oldPath,
+                            Models.stringValue(summary.get("compareBase")),
+                            Models.stringValue(summary.get("compareHead"))));
                     return;
                 }
                 if ("sync".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
@@ -293,8 +300,20 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     String cachedPatch = diffCacheService.readPatch(ruleId, filePath, oldPath);
                     boolean cacheHit = cachedPatch != null;
                     if (!cacheHit) {
+                        Map<String, Object> summary = diffCacheService.readSummary(ruleId);
+                        Models.require(summary != null, "Diff cache does not exist");
+                        String compareBase = Models.nullableString(summary.get("compareBase"));
+                        String compareHead = Models.nullableString(summary.get("compareHead"));
+                        Models.require(compareBase != null && !compareBase.isBlank(), "Diff cache is missing compareBase");
+                        Models.require(compareHead != null && !compareHead.isBlank(), "Diff cache is missing compareHead");
                         Map<String, Object> patchPayload =
-                            gitService.diffFile(configService.getConfig(), selection.project, selection.rule, filePath, oldPath);
+                            gitService.diffFileSnapshot(
+                                configService.getConfig(),
+                                selection.project,
+                                filePath,
+                                oldPath,
+                                compareBase,
+                                compareHead);
                         cachedPatch = Models.nullableString(patchPayload.get("patch"));
                         diffCacheService.writePatch(ruleId, filePath, oldPath, cachedPatch);
                     }
