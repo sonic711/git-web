@@ -306,14 +306,26 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                         String compareHead = Models.nullableString(summary.get("compareHead"));
                         Models.require(compareBase != null && !compareBase.isBlank(), "Diff cache is missing compareBase");
                         Models.require(compareHead != null && !compareHead.isBlank(), "Diff cache is missing compareHead");
-                        Map<String, Object> patchPayload =
-                            gitService.diffFileSnapshot(
+                        Map<String, Object> snapshot = diffCacheService.readSnapshot(ruleId, filePath, oldPath);
+                        if (snapshot == null) {
+                            snapshot = gitService.collectDiffFileSnapshot(
                                 configService.getConfig(),
                                 selection.project,
                                 filePath,
                                 oldPath,
                                 compareBase,
                                 compareHead);
+                            diffCacheService.writeSnapshot(
+                                ruleId,
+                                filePath,
+                                oldPath,
+                                Models.booleanValue(snapshot.get("baseExists")),
+                                Models.nullableString(snapshot.get("baseContent")),
+                                Models.booleanValue(snapshot.get("headExists")),
+                                Models.nullableString(snapshot.get("headContent")));
+                        }
+                        Map<String, Object> patchPayload =
+                            gitService.diffFileSnapshotFromCache(filePath, oldPath, snapshot);
                         cachedPatch = Models.nullableString(patchPayload.get("patch"));
                         diffCacheService.writePatch(ruleId, filePath, oldPath, cachedPatch);
                     }
@@ -499,7 +511,31 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private Map<String, Object> refreshDiffCache(RuleSelection selection) throws Exception {
         try {
             Map<String, Object> summary = gitService.diff(configService.getConfig(), selection.project, selection.rule);
-            return diffCacheService.writeSummary(selection.rule.id, summary, "Manual refresh completed");
+            Map<String, Object> cachedSummary =
+                diffCacheService.writeSummary(selection.rule.id, summary, "Manual refresh completed");
+            String compareBase = Models.stringValue(summary.get("compareBase"));
+            String compareHead = Models.stringValue(summary.get("compareHead"));
+            for (Object item : Json.asList(summary.getOrDefault("files", List.of()))) {
+                Map<String, Object> file = Json.asObject(item);
+                String path = Models.stringValue(file.get("path"));
+                String oldPath = Models.nullableString(file.get("oldPath"));
+                Map<String, Object> snapshot = gitService.collectDiffFileSnapshot(
+                    configService.getConfig(),
+                    selection.project,
+                    path,
+                    oldPath,
+                    compareBase,
+                    compareHead);
+                diffCacheService.writeSnapshot(
+                    selection.rule.id,
+                    path,
+                    oldPath,
+                    Models.booleanValue(snapshot.get("baseExists")),
+                    Models.nullableString(snapshot.get("baseContent")),
+                    Models.booleanValue(snapshot.get("headExists")),
+                    Models.nullableString(snapshot.get("headContent")));
+            }
+            return cachedSummary;
         } catch (Exception exception) {
             diffCacheService.markFailed(selection.rule.id, exception.getMessage());
             throw exception;

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,29 +122,45 @@ final class GitService {
     Map<String, Object> diffFileSnapshot(AppConfig config, ProjectConfig project, String path, String oldPath,
                                          String compareBase, String compareHead)
         throws IOException, InterruptedException {
+        Map<String, Object> snapshot = collectDiffFileSnapshot(config, project, path, oldPath, compareBase, compareHead);
+        return diffFileSnapshotFromCache(path, oldPath, snapshot);
+    }
+
+    Map<String, Object> collectDiffFileSnapshot(AppConfig config, ProjectConfig project, String path, String oldPath,
+                                                String compareBase, String compareHead)
+        throws IOException, InterruptedException {
         Path repoPath = project.localRepoPath(config);
         Models.require(Files.exists(repoPath), "Local repository does not exist");
         Models.require(isGitRepo(repoPath), "Local path is not a git repository");
 
-        List<String> command = new ArrayList<>();
-        command.add("git");
-        command.add("diff");
-        command.add("--no-color");
-        command.add("--find-renames");
-        command.add("--unified=3");
-        command.add(compareBase);
-        command.add(compareHead);
-        command.add("--");
-        if (oldPath != null && !oldPath.isBlank() && !oldPath.equals(path)) {
-            command.add(oldPath);
-        }
-        command.add(path);
+        String basePath = oldPath != null && !oldPath.isBlank() ? oldPath : path;
+        SnapshotContent baseSnapshot = readRevisionFile(repoPath, compareBase, basePath);
+        SnapshotContent headSnapshot = readRevisionFile(repoPath, compareHead, path);
 
-        GitCommandResult patch = runChecked(repoPath, command);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("path", path);
         response.put("oldPath", oldPath);
-        response.put("patch", patch.stdout);
+        response.put("baseExists", baseSnapshot.exists);
+        response.put("baseContent", baseSnapshot.content);
+        response.put("headExists", headSnapshot.exists);
+        response.put("headContent", headSnapshot.content);
+        return response;
+    }
+
+    Map<String, Object> diffFileSnapshotFromCache(String path, String oldPath, Map<String, Object> snapshot) {
+        String basePath = oldPath != null && !oldPath.isBlank() ? oldPath : path;
+        SnapshotContent baseSnapshot = new SnapshotContent(
+            Models.booleanValue(snapshot.get("baseExists")),
+            Models.nullableString(snapshot.get("baseContent")) == null ? "" : Models.nullableString(snapshot.get("baseContent")));
+        SnapshotContent headSnapshot = new SnapshotContent(
+            Models.booleanValue(snapshot.get("headExists")),
+            Models.nullableString(snapshot.get("headContent")) == null ? "" : Models.nullableString(snapshot.get("headContent")));
+        String patch = buildUnifiedDiff(basePath, path, baseSnapshot, headSnapshot);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("path", path);
+        response.put("oldPath", oldPath);
+        response.put("patch", patch);
         return response;
     }
 
@@ -243,6 +260,88 @@ final class GitService {
         return result.stdout.strip();
     }
 
+    private SnapshotContent readRevisionFile(Path repoPath, String revision, String path) throws IOException, InterruptedException {
+        GitCommandResult exists = runner.run(repoPath, List.of("git", "cat-file", "-e", revision + ":" + path));
+        if (!exists.isSuccess()) {
+            return new SnapshotContent(false, "");
+        }
+        GitCommandResult content = runChecked(repoPath, List.of("git", "show", revision + ":" + path));
+        return new SnapshotContent(true, content.stdout);
+    }
+
+    private String buildUnifiedDiff(String basePath, String headPath, SnapshotContent baseSnapshot, SnapshotContent headSnapshot) {
+        List<String> baseLines = splitLines(baseSnapshot.content);
+        List<String> headLines = splitLines(headSnapshot.content);
+        List<DiffOp> ops = buildDiffOps(baseLines, headLines);
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("diff --git a/")
+            .append(baseSnapshot.exists ? basePath : headPath)
+            .append(" b/")
+            .append(headSnapshot.exists ? headPath : basePath)
+            .append('\n');
+        builder.append("--- ")
+            .append(baseSnapshot.exists ? "a/" + basePath : "/dev/null")
+            .append('\n');
+        builder.append("+++ ")
+            .append(headSnapshot.exists ? "b/" + headPath : "/dev/null")
+            .append('\n');
+        builder.append("@@\n");
+        for (DiffOp op : ops) {
+            builder.append(op.prefix).append(op.line).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private List<DiffOp> buildDiffOps(List<String> baseLines, List<String> headLines) {
+        int baseSize = baseLines.size();
+        int headSize = headLines.size();
+        int[][] lcs = new int[baseSize + 1][headSize + 1];
+        for (int i = baseSize - 1; i >= 0; i--) {
+            for (int j = headSize - 1; j >= 0; j--) {
+                if (baseLines.get(i).equals(headLines.get(j))) {
+                    lcs[i][j] = lcs[i + 1][j + 1] + 1;
+                } else {
+                    lcs[i][j] = Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+                }
+            }
+        }
+
+        List<DiffOp> ops = new ArrayList<>();
+        int i = 0;
+        int j = 0;
+        while (i < baseSize && j < headSize) {
+            if (baseLines.get(i).equals(headLines.get(j))) {
+                ops.add(new DiffOp(' ', baseLines.get(i)));
+                i++;
+                j++;
+            } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+                ops.add(new DiffOp('-', baseLines.get(i)));
+                i++;
+            } else {
+                ops.add(new DiffOp('+', headLines.get(j)));
+                j++;
+            }
+        }
+        while (i < baseSize) {
+            ops.add(new DiffOp('-', baseLines.get(i++)));
+        }
+        while (j < headSize) {
+            ops.add(new DiffOp('+', headLines.get(j++)));
+        }
+        if (ops.isEmpty()) {
+            return Collections.singletonList(new DiffOp(' ', "(empty diff)"));
+        }
+        return ops;
+    }
+
+    private List<String> splitLines(String content) {
+        if (content == null || content.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(List.of(content.replace("\r", "").split("\n", -1)));
+    }
+
     private String originRef(RuleConfig rule) {
         return "refs/remotes/origin/" + rule.sourceBranch;
     }
@@ -277,6 +376,12 @@ final class GitService {
             return "M";
         }
         return String.valueOf(statusCode.charAt(0));
+    }
+
+    private record SnapshotContent(boolean exists, String content) {
+    }
+
+    private record DiffOp(char prefix, String line) {
     }
 
     static final class SyncResult {

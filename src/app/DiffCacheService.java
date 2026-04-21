@@ -31,6 +31,7 @@ final class DiffCacheService {
         Files.createDirectories(ruleRoot(ruleId));
         writeJson(summaryPath(ruleId), summary);
         clearPatchCache(ruleId);
+        clearSnapshotCache(ruleId);
         Map<String, Object> meta = defaultMeta();
         meta.put("cachedAt", Models.nowIso());
         meta.put("cacheStatus", "fresh");
@@ -51,6 +52,29 @@ final class DiffCacheService {
         Path patchPath = patchPath(ruleId, path, oldPath);
         Files.createDirectories(patchPath.getParent());
         Files.writeString(patchPath, patch == null ? "" : patch, StandardCharsets.UTF_8);
+    }
+
+    synchronized Map<String, Object> readSnapshot(String ruleId, String path, String oldPath) throws IOException {
+        Path snapshotPath = snapshotPath(ruleId, path, oldPath);
+        if (!Files.exists(snapshotPath)) {
+            return null;
+        }
+        return readJson(snapshotPath);
+    }
+
+    synchronized void writeSnapshot(String ruleId, String path, String oldPath,
+                                    boolean baseExists, String baseContent,
+                                    boolean headExists, String headContent) throws IOException {
+        Path snapshotPath = snapshotPath(ruleId, path, oldPath);
+        Files.createDirectories(snapshotPath.getParent());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("path", path);
+        payload.put("oldPath", oldPath);
+        payload.put("baseExists", baseExists);
+        payload.put("baseContent", baseContent == null ? "" : baseContent);
+        payload.put("headExists", headExists);
+        payload.put("headContent", headContent == null ? "" : headContent);
+        writeJson(snapshotPath, payload);
     }
 
     synchronized void markStale(String ruleId, String message) throws IOException {
@@ -144,6 +168,18 @@ final class DiffCacheService {
         }
     }
 
+    private void clearSnapshotCache(String ruleId) throws IOException {
+        Path snapshotsDir = snapshotsDir(ruleId);
+        if (!Files.exists(snapshotsDir)) {
+            return;
+        }
+        try (var walk = Files.walk(snapshotsDir)) {
+            for (Path path : walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     private Path ruleRoot(String ruleId) {
         return cacheRoot.resolve(ruleId);
     }
@@ -160,8 +196,16 @@ final class DiffCacheService {
         return ruleRoot(ruleId).resolve("files");
     }
 
+    private Path snapshotsDir(String ruleId) {
+        return ruleRoot(ruleId).resolve("snapshots");
+    }
+
     private Path patchPath(String ruleId, String path, String oldPath) {
         return patchesDir(ruleId).resolve(hashKey((oldPath == null ? "" : oldPath) + "=>" + path) + ".patch");
+    }
+
+    private Path snapshotPath(String ruleId, String path, String oldPath) {
+        return snapshotsDir(ruleId).resolve(hashKey((oldPath == null ? "" : oldPath) + "=>" + path) + ".json");
     }
 
     private String hashKey(String value) {

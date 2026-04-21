@@ -104,7 +104,7 @@ async function loadCachedSummary() {
 
 async function refreshDiffSummary() {
   try {
-    const diff = await withLoading('抓取最新差異中...', () =>
+    const diff = await withLoading('抓取最新差異並建立檔案快取中...', () =>
       api(`/api/rules/${diffState.ruleId}/diff-cache/refresh`, { method: 'POST' })
     );
     applySummary(diff);
