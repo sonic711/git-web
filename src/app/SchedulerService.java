@@ -35,7 +35,8 @@ final class SchedulerService {
         AppConfig config = configService.getConfig();
         for (ProjectConfig project : config.projects) {
             for (RuleConfig rule : project.rules) {
-                String nextRun = computeNextRun(rule);
+                RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
+                String nextRun = computeNextRun(rule, state);
                 runtimeStateService.setNextRun(rule.id, nextRun);
             }
         }
@@ -68,9 +69,12 @@ final class SchedulerService {
         }
     }
 
-    private String computeNextRun(RuleConfig rule) {
+    private String computeNextRun(RuleConfig rule, RuleRuntimeState state) {
         if (rule.manualOnly || !rule.schedule.enabled) {
             return null;
+        }
+        if (state.lastRunAt == null || state.lastRunAt.isBlank()) {
+            return OffsetDateTime.now(ZoneOffset.ofHours(8)).toString();
         }
         return OffsetDateTime.now(ZoneOffset.ofHours(8))
             .plusMinutes(rule.schedule.intervalMinutes)

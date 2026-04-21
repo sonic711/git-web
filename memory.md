@@ -48,6 +48,7 @@
 - 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
+- 若某條 rule 從未手動同步過，首次啟用自動同步後也必須立即進入排程，不可等到第一次人工執行後才開始。
 
 ## 檔案結構決策
 
@@ -142,3 +143,4 @@
 - 前端新增全畫面 loading overlay，覆蓋所有主要按鈕操作。
 - UI 改為專案視角：先建立專案，再在專案底下建立多條同步規則。
 - repo 改為只追蹤 `config/settings.example.json`，本機 `config/settings.json` 已從 git index 移除。
+- 修正首次啟用自動同步但尚未手動同步過的 rule 不會執行的問題；scheduler 現在會將第一次 `nextRunAt` 設為當下時間。
