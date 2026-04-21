@@ -46,6 +46,8 @@
 - 同一本地專案可對應多筆 mapping，且每筆 mapping 使用獨立內部 remote 名稱。
 - 同步前需先將本地 `sourceBranch` 強制對齊廠商 `origin/<sourceBranch>`，再執行 `git pull --ff-only`。
 - 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
+- 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
+- `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 
 ## 檔案結構決策
 
@@ -138,3 +140,5 @@
 - 同一本地 repo 新增執行鎖，避免多筆 mapping 同時操作互相干擾。
 - 同步流程改為先對齊 vendor branch，再 pull，再 push，避免廠商 force push 造成歷程偏移。
 - 前端新增全畫面 loading overlay，覆蓋所有主要按鈕操作。
+- UI 改為專案視角：先建立專案，再在專案底下建立多條同步規則。
+- repo 改為只追蹤 `config/settings.example.json`，本機 `config/settings.json` 已從 git index 移除。

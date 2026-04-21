@@ -4,19 +4,14 @@
 
 目前已確認的核心能力：
 
-1. 使用者可設定廠商 repo 的 `HTTPS` URL、來源 branch、本機專案目錄。
-2. 系統會先檢查指定目錄是否已有 repo；若沒有則先 `clone`。
-   本機設定改為「主目錄 + 專案資料夾名稱」，系統會自動組出實際 repo 路徑。
-3. 使用者可設定目標 remote 的 `SSH` URL 與目標 branch。
-4. 系統可將廠商來源 branch 推送到指定目標 remote / branch。
-   同一本地專案可建立多筆 mapping，推送到不同 remote。
-5. UI 以 `checkbox` 控制本次同步是否使用 `git push -f`。
-6. 一次只執行一筆 mapping 規則。
-7. 系統設定以可攜式設定檔保存，方便直接複製給其他人使用。
-8. 系統需支援多專案定時推送到指定 remote。
-9. 某些 mapping 可設定為 `manualOnly`，不得排程。
-10. 某些 mapping 可設定為 `reviewRequired`，需先看差異並人工確認。
-11. 使用者可在 UI 隨時修改 remote、branch、排程與規則，且修改結果必須寫回 `config/settings.json`。
+1. 使用者先建立一個專案，再在專案底下建立多條同步規則。
+2. 專案保存廠商 repo 的 `HTTPS` URL、本地主目錄與本地專案資料夾名稱。
+3. 規則保存來源 branch、目標 remote、目標 branch、排程與 force push 選項。
+4. 同一個專案可同時有 `sit -> sit`、`sit2 -> sit2`、`uat -> uat` 等多條規則。
+5. 自動同步規則仍可手動同步，不需為了 `-f` 額外建立新規則。
+6. 系統會先檢查實際 repo 路徑是否已有 repo；若沒有則先 `clone`。
+7. 推送前會先將本地來源 branch 對齊廠商 `origin/<sourceBranch>`。
+8. 系統設定以可攜式設定檔保存，方便直接複製給其他人使用。
 
 ## 文件清單
 
@@ -51,6 +46,7 @@
 - 可複製的業務設定與本機執行狀態分離保存。
 - `memory.md` 用於保留開發進度、已確認決策與最近 session 歷程，方便後續 agent 接手。
 - 主設定檔是可匯入、可匯出的單一來源，UI 修改後必須立即回寫。
+- git 只追蹤 [config/settings.example.json](/Users/sonic711/Desktop/development/git-web/config/settings.example.json)，不追蹤本機實際使用的 `config/settings.json`。
 
 ## 啟動方式
 
@@ -76,4 +72,4 @@ Windows PowerShell:
 
 - 需安裝 `JDK 17`
 - 需安裝 `git`
-- `config/settings.json` 內的本機路徑需改成目標機器可用的路徑
+- 第一次可參考 `config/settings.example.json` 建立本機的 `config/settings.json`

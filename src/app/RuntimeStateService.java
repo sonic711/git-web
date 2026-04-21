@@ -1,6 +1,6 @@
 package app;
 
-import app.Models.MappingRuntimeState;
+import app.Models.RuleRuntimeState;
 import app.Models.RuntimeState;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,8 +21,8 @@ final class RuntimeStateService {
         return current;
     }
 
-    synchronized MappingRuntimeState getOrCreate(String mappingId) {
-        return current.mappingStates.computeIfAbsent(mappingId, ignored -> new MappingRuntimeState());
+    synchronized RuleRuntimeState getOrCreate(String mappingId) {
+        return current.mappingStates.computeIfAbsent(mappingId, ignored -> new RuleRuntimeState());
     }
 
     synchronized void save() throws IOException {
@@ -30,7 +30,7 @@ final class RuntimeStateService {
     }
 
     synchronized void markRunning(String mappingId, boolean running) throws IOException {
-        MappingRuntimeState state = getOrCreate(mappingId);
+        RuleRuntimeState state = getOrCreate(mappingId);
         state.running = running;
         if (running) {
             state.lastStatus = "running";
@@ -42,7 +42,7 @@ final class RuntimeStateService {
     synchronized void markFinished(String mappingId, String status, String triggerSource, String nextRunAt, String logPath,
                                    String lastMessage)
         throws IOException {
-        MappingRuntimeState state = getOrCreate(mappingId);
+        RuleRuntimeState state = getOrCreate(mappingId);
         state.running = false;
         state.lastStatus = status;
         state.lastRunAt = Models.nowIso();
@@ -54,7 +54,7 @@ final class RuntimeStateService {
     }
 
     synchronized void setNextRun(String mappingId, String nextRunAt) throws IOException {
-        MappingRuntimeState state = getOrCreate(mappingId);
+        RuleRuntimeState state = getOrCreate(mappingId);
         state.nextRunAt = nextRunAt;
         save();
     }

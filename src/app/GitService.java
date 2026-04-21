@@ -2,8 +2,9 @@ package app;
 
 import app.GitCommandRunner.GitCommandResult;
 import app.Models.AppConfig;
-import app.Models.MappingConfig;
+import app.Models.ProjectConfig;
 import app.Models.RemoteConfig;
+import app.Models.RuleConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,45 +20,50 @@ final class GitService {
         this.runner = runner;
     }
 
-    Map<String, Object> validate(AppConfig config, MappingConfig mapping) throws IOException, InterruptedException {
+    Map<String, Object> validate(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         List<Object> checks = new ArrayList<>();
         boolean ok = true;
-        RemoteConfig remote = Models.findRemote(config, mapping.targetRemoteId);
+        RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
 
-        ok &= addCheck(checks, "mapping_enabled", mapping.enabled);
-        boolean repoExists = Files.exists(mapping.localRepoPath());
+        ok &= addCheck(checks, "project_enabled", project.enabled);
+        ok &= addCheck(checks, "rule_enabled", rule.enabled);
+        boolean repoExists = Files.exists(project.localRepoPath());
         ok &= addCheck(checks, "repo_path_exists", repoExists);
-        boolean repoReady = repoExists && isGitRepo(mapping.localRepoPath());
+        boolean repoReady = repoExists && isGitRepo(project.localRepoPath());
         ok &= addCheck(checks, "repo_ready", repoReady || !repoExists);
         if (repoReady) {
-            ok &= addCheck(checks, "branch_exists", branchExists(mapping.localRepoPath(), mapping.sourceBranch));
+            fetchOrigin(project.localRepoPath());
+            ok &= addCheck(checks, "vendor_branch_exists", branchExists(project.localRepoPath(), originRef(rule)));
         }
         ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && remote.baseUrl != null && !remote.baseUrl.isBlank());
-        ok &= addCheck(checks, "target_repo_name_valid", mapping.targetRepoName != null && mapping.targetRepoName.endsWith(".git"));
+        ok &= addCheck(checks, "target_repo_name_valid", rule.targetRepoName != null && rule.targetRepoName.endsWith(".git"));
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("mappingId", mapping.id);
+        result.put("projectId", project.id);
+        result.put("ruleId", rule.id);
         result.put("ok", ok);
         result.put("checks", checks);
         return result;
     }
 
-    Map<String, Object> diff(AppConfig config, MappingConfig mapping) throws IOException, InterruptedException {
-        ensureRepoReady(mapping);
-        ensureTargetRemote(config, mapping);
-        RemoteConfig remote = Models.findRemote(config, mapping.targetRemoteId);
-        String internalRemote = internalRemoteName(mapping.id);
-        runChecked(mapping.localRepoPath(), List.of("git", "fetch", internalRemote, mapping.targetBranch));
+    Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
+        ensureRepoReady(project);
+        ensureTargetRemote(config, project, rule);
+        RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+        String internalRemote = internalRemoteName(rule.id);
+        fetchOrigin(project.localRepoPath());
+        runChecked(project.localRepoPath(), List.of("git", "fetch", internalRemote, rule.targetBranch));
 
-        String targetRef = internalRemote + "/" + mapping.targetBranch;
-        boolean targetExists = branchExists(mapping.localRepoPath(), targetRef);
-        String range = targetExists ? targetRef + ".." + mapping.sourceBranch : mapping.sourceBranch;
-        GitCommandResult commits = runChecked(mapping.localRepoPath(),
+        String sourceRef = originRef(rule);
+        String targetRef = internalRemote + "/" + rule.targetBranch;
+        boolean targetExists = branchExists(project.localRepoPath(), targetRef);
+        String range = targetExists ? targetRef + ".." + sourceRef : sourceRef;
+        GitCommandResult commits = runChecked(project.localRepoPath(),
             List.of("git", "log", "--oneline", "--no-merges", range));
-        GitCommandResult files = runChecked(mapping.localRepoPath(),
+        GitCommandResult files = runChecked(project.localRepoPath(),
             targetExists
-                ? List.of("git", "diff", "--name-status", targetRef, mapping.sourceBranch)
-                : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", mapping.sourceBranch));
+                ? List.of("git", "diff", "--name-status", targetRef, sourceRef)
+                : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", sourceRef));
 
         List<Object> commitList = new ArrayList<>();
         String[] commitLines = commits.stdout.strip().isEmpty() ? new String[0] : commits.stdout.strip().split("\\R");
@@ -79,43 +85,47 @@ final class GitService {
             changedFileList.add(fileItem);
         }
 
-        int changedFiles = changedFileList.size();
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("aheadCommits", commitList.size());
-        summary.put("changedFiles", changedFiles);
+        summary.put("changedFiles", changedFileList.size());
 
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("mappingId", mapping.id);
-        response.put("sourceBranch", mapping.sourceBranch);
-        response.put("targetBranch", mapping.targetBranch);
-        response.put("targetRepoName", mapping.targetRepoName);
+        response.put("projectId", project.id);
+        response.put("projectName", project.name);
+        response.put("ruleId", rule.id);
+        response.put("ruleName", rule.name);
+        response.put("sourceBranch", rule.sourceBranch);
+        response.put("targetBranch", rule.targetBranch);
+        response.put("targetRepoName", rule.targetRepoName);
         response.put("targetRemoteName", remote.name);
-        response.put("targetRemoteUrl", targetRemoteUrl(config, mapping));
+        response.put("targetRemoteUrl", targetRemoteUrl(config, rule));
         response.put("summary", summary);
         response.put("commits", commitList);
         response.put("files", changedFileList);
         return response;
     }
 
-    SyncResult sync(AppConfig config, MappingConfig mapping, boolean forcePush, boolean reviewConfirmed, String triggerSource)
+    SyncResult sync(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush, boolean reviewConfirmed,
+                    String triggerSource)
         throws IOException, InterruptedException {
-        Models.require(mapping.enabled, "Mapping is disabled");
+        Models.require(project.enabled, "Project is disabled");
+        Models.require(rule.enabled, "Rule is disabled");
         if (forcePush) {
-            Models.require(mapping.allowForcePush, "Force push is not allowed");
+            Models.require(rule.allowForcePush, "Force push is not allowed");
         }
         if ("schedule".equals(triggerSource)) {
-            Models.require(!mapping.manualOnly, "Manual-only mapping cannot be scheduled");
+            Models.require(!rule.manualOnly, "Manual-only rule cannot be scheduled");
         }
-        if (mapping.reviewRequired) {
+        if (rule.reviewRequired) {
             Models.require(reviewConfirmed, "Review confirmation is required");
         }
 
-        ensureRepoReady(mapping);
-        ensureTargetRemote(config, mapping);
-        String internalRemote = internalRemoteName(mapping.id);
+        ensureRepoReady(project);
+        ensureTargetRemote(config, project, rule);
+        String internalRemote = internalRemoteName(rule.id);
 
         List<GitCommandResult> results = new ArrayList<>();
-        syncVendorBranch(mapping, results);
+        syncVendorBranch(project, rule, results);
 
         List<String> pushCommand = new ArrayList<>();
         pushCommand.add("git");
@@ -124,51 +134,50 @@ final class GitService {
             pushCommand.add("-f");
         }
         pushCommand.add(internalRemote);
-        pushCommand.add(mapping.sourceBranch + ":refs/heads/" + mapping.targetBranch);
-        results.add(runChecked(mapping.localRepoPath(), pushCommand));
+        pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
+        results.add(runChecked(project.localRepoPath(), pushCommand));
 
         return new SyncResult(results);
     }
 
-    private void syncVendorBranch(MappingConfig mapping, List<GitCommandResult> results) throws IOException, InterruptedException {
-        Path repoPath = mapping.localRepoPath();
-        String originRef = "refs/remotes/origin/" + mapping.sourceBranch;
-        results.add(runChecked(repoPath, List.of("git", "fetch", "origin", "--prune")));
+    private void syncVendorBranch(ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
+        throws IOException, InterruptedException {
+        Path repoPath = project.localRepoPath();
+        String originRef = originRef(rule);
+        results.add(fetchOrigin(repoPath));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
-        // Force the local source branch to match the vendor branch before pulling, to absorb vendor-side force pushes.
-        results.add(runChecked(repoPath, List.of("git", "checkout", "-B", mapping.sourceBranch, "origin/" + mapping.sourceBranch)));
+        results.add(runChecked(repoPath, List.of("git", "checkout", "-B", rule.sourceBranch, "origin/" + rule.sourceBranch)));
         results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
-        results.add(runChecked(repoPath, List.of("git", "pull", "--ff-only", "origin", mapping.sourceBranch)));
+        results.add(runChecked(repoPath, List.of("git", "pull", "--ff-only", "origin", rule.sourceBranch)));
     }
 
-    private void ensureRepoReady(MappingConfig mapping) throws IOException, InterruptedException {
-        Path repoPath = mapping.localRepoPath();
+    private void ensureRepoReady(ProjectConfig project) throws IOException, InterruptedException {
+        Path repoPath = project.localRepoPath();
         if (!Files.exists(repoPath)) {
             Files.createDirectories(repoPath.getParent());
-            runChecked(null, List.of("git", "clone", mapping.vendorRepoUrl, repoPath.toString()));
+            runChecked(null, List.of("git", "clone", project.vendorRepoUrl, repoPath.toString()));
             return;
         }
         Models.require(isGitRepo(repoPath), "Existing path is not a git repository");
         String originUrl = getRemoteUrl(repoPath, "origin");
-        Models.require(originUrl == null || originUrl.equals(mapping.vendorRepoUrl),
+        Models.require(originUrl == null || originUrl.equals(project.vendorRepoUrl),
             "Existing repository origin does not match vendorRepoUrl");
     }
 
-    private void ensureTargetRemote(AppConfig config, MappingConfig mapping) throws IOException, InterruptedException {
-        RemoteConfig remote = Models.findRemote(config, mapping.targetRemoteId);
-        String name = internalRemoteName(mapping.id);
-        String targetUrl = targetRemoteUrl(config, mapping);
-        String existingUrl = getRemoteUrl(mapping.localRepoPath(), name);
+    private void ensureTargetRemote(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
+        String name = internalRemoteName(rule.id);
+        String targetUrl = targetRemoteUrl(config, rule);
+        String existingUrl = getRemoteUrl(project.localRepoPath(), name);
         if (existingUrl == null) {
-            runChecked(mapping.localRepoPath(), List.of("git", "remote", "add", name, targetUrl));
+            runChecked(project.localRepoPath(), List.of("git", "remote", "add", name, targetUrl));
         } else if (!existingUrl.equals(targetUrl)) {
-            runChecked(mapping.localRepoPath(), List.of("git", "remote", "set-url", name, targetUrl));
+            runChecked(project.localRepoPath(), List.of("git", "remote", "set-url", name, targetUrl));
         }
     }
 
-    String targetRemoteUrl(AppConfig config, MappingConfig mapping) {
-        RemoteConfig remote = Models.findRemote(config, mapping.targetRemoteId);
-        return Models.buildGitUrl(remote.baseUrl, mapping.targetRepoName);
+    String targetRemoteUrl(AppConfig config, RuleConfig rule) {
+        RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+        return Models.buildGitUrl(remote.baseUrl, rule.targetRepoName);
     }
 
     private boolean isGitRepo(Path path) throws IOException, InterruptedException {
@@ -179,6 +188,14 @@ final class GitService {
     private boolean branchExists(Path repoPath, String branch) throws IOException, InterruptedException {
         GitCommandResult result = runner.run(repoPath, List.of("git", "rev-parse", "--verify", branch));
         return result.isSuccess();
+    }
+
+    private GitCommandResult fetchOrigin(Path repoPath) throws IOException, InterruptedException {
+        return runChecked(repoPath, List.of("git", "fetch", "origin", "--prune"));
+    }
+
+    private String originRef(RuleConfig rule) {
+        return "refs/remotes/origin/" + rule.sourceBranch;
     }
 
     private String getRemoteUrl(Path repoPath, String name) throws IOException, InterruptedException {
@@ -202,8 +219,8 @@ final class GitService {
         return ok;
     }
 
-    private String internalRemoteName(String mappingId) {
-        return "sync_target_" + mappingId;
+    private String internalRemoteName(String ruleId) {
+        return "sync_target_" + ruleId;
     }
 
     static final class SyncResult {
@@ -213,9 +230,10 @@ final class GitService {
             this.commandResults = commandResults;
         }
 
-        String asLogText(String mappingId, boolean forcePush, boolean reviewConfirmed, String triggerSource) {
+        String asLogText(String projectId, String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource) {
             StringBuilder builder = new StringBuilder();
-            builder.append("mappingId=").append(mappingId).append('\n');
+            builder.append("projectId=").append(projectId).append('\n');
+            builder.append("ruleId=").append(ruleId).append('\n');
             builder.append("triggerSource=").append(triggerSource).append('\n');
             builder.append("forcePush=").append(forcePush).append('\n');
             builder.append("reviewConfirmed=").append(reviewConfirmed).append('\n');

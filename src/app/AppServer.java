@@ -1,9 +1,11 @@
 package app;
 
 import app.Models.AppConfig;
-import app.Models.MappingConfig;
-import app.Models.MappingRuntimeState;
+import app.Models.ProjectConfig;
 import app.Models.RemoteConfig;
+import app.Models.RuleConfig;
+import app.Models.RuleRuntimeState;
+import app.Models.RuleSelection;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.GraphicsEnvironment;
@@ -13,10 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.swing.JFileChooser;
@@ -47,7 +49,8 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         server.setExecutor(Executors.newCachedThreadPool());
         server.createContext("/api/system", this::handleSystem);
         server.createContext("/api/remotes", this::handleRemotes);
-        server.createContext("/api/mappings", this::handleMappings);
+        server.createContext("/api/projects", this::handleProjects);
+        server.createContext("/api/rules", this::handleRules);
         server.createContext("/api/schedules", this::handleSchedules);
         server.createContext("/api/logs", this::handleLogs);
         server.createContext("/", this::handleStatic);
@@ -68,9 +71,9 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     }
 
     @Override
-    public void runScheduledSync(String mappingId) {
+    public void runScheduledSync(String ruleId) {
         try {
-            sync(mappingId, false, false, "schedule");
+            sync(ruleId, false, false, "schedule");
         } catch (Exception exception) {
             exception.printStackTrace();
         }
@@ -102,14 +105,12 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 HttpUtil.sendJson(exchange, 200, remotes);
                 return;
             }
-
             if ("POST".equals(exchange.getRequestMethod()) && "/api/remotes".equals(path)) {
                 RemoteConfig remote = RemoteConfig.fromMap(HttpUtil.readJsonObject(exchange));
                 configService.upsertRemote(remote);
                 HttpUtil.sendJson(exchange, 200, remote.toMap());
                 return;
             }
-
             if ("PUT".equals(exchange.getRequestMethod()) && path.startsWith("/api/remotes/")) {
                 String id = path.substring("/api/remotes/".length());
                 Map<String, Object> body = HttpUtil.readJsonObject(exchange);
@@ -125,75 +126,106 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", id));
                 return;
             }
-
             HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
         } catch (Exception exception) {
             HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
         }
     }
 
-    private void handleMappings(HttpExchange exchange) throws IOException {
+    private void handleProjects(HttpExchange exchange) throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
-            if ("GET".equals(exchange.getRequestMethod()) && "/api/mappings".equals(path)) {
-                HttpUtil.sendJson(exchange, 200, mappingListView());
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/projects".equals(path)) {
+                HttpUtil.sendJson(exchange, 200, projectListView());
                 return;
             }
-            if ("POST".equals(exchange.getRequestMethod()) && "/api/mappings".equals(path)) {
-                MappingConfig mapping = MappingConfig.fromMap(HttpUtil.readJsonObject(exchange));
-                configService.upsertMapping(mapping);
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/projects".equals(path)) {
+                ProjectConfig project = ProjectConfig.fromMap(HttpUtil.readJsonObject(exchange));
+                configService.upsertProject(project);
                 schedulerService.refreshScheduleState();
-                HttpUtil.sendJson(exchange, 200, mapping.toMap());
+                HttpUtil.sendJson(exchange, 200, project.toMap());
                 return;
             }
 
             String[] parts = path.split("/");
-            if (parts.length >= 4 && "api".equals(parts[1]) && "mappings".equals(parts[2])) {
-                String mappingId = parts[3];
+            if (parts.length >= 4 && "api".equals(parts[1]) && "projects".equals(parts[2])) {
+                String projectId = parts[3];
                 if (parts.length == 4 && "PUT".equals(exchange.getRequestMethod())) {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
-                    body.put("id", mappingId);
-                    MappingConfig mapping = MappingConfig.fromMap(body);
-                    configService.upsertMapping(mapping);
+                    body.put("id", projectId);
+                    ProjectConfig project = ProjectConfig.fromMap(body);
+                    configService.upsertProject(project);
                     schedulerService.refreshScheduleState();
-                    HttpUtil.sendJson(exchange, 200, mapping.toMap());
+                    HttpUtil.sendJson(exchange, 200, project.toMap());
                     return;
                 }
                 if (parts.length == 4 && "DELETE".equals(exchange.getRequestMethod())) {
-                    configService.deleteMapping(mappingId);
-                    runtimeStateService.delete(mappingId);
+                    AppConfig config = configService.getConfig();
+                    ProjectConfig project = Models.findProject(config, projectId);
+                    for (RuleConfig rule : project.rules) {
+                        runtimeStateService.delete(rule.id);
+                    }
+                    configService.deleteProject(projectId);
                     schedulerService.refreshScheduleState();
-                    HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", mappingId));
+                    HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", projectId));
                     return;
                 }
-                if (parts.length == 5 && "validate".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
-                    MappingConfig mapping = Models.findMapping(configService.getConfig(), mappingId);
-                    HttpUtil.sendJson(exchange, 200, gitService.validate(configService.getConfig(), mapping));
+                if (parts.length == 6 && "rules".equals(parts[4])) {
+                    String ruleId = parts[5];
+                    if ("PUT".equals(exchange.getRequestMethod())) {
+                        Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                        body.put("id", ruleId);
+                        RuleConfig rule = RuleConfig.fromMap(body);
+                        configService.upsertRule(projectId, rule);
+                        schedulerService.refreshScheduleState();
+                        HttpUtil.sendJson(exchange, 200, rule.toMap());
+                        return;
+                    }
+                    if ("DELETE".equals(exchange.getRequestMethod())) {
+                        configService.deleteRule(projectId, ruleId);
+                        runtimeStateService.delete(ruleId);
+                        schedulerService.refreshScheduleState();
+                        HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", ruleId));
+                        return;
+                    }
+                }
+            }
+            HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
+        } catch (Exception exception) {
+            HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
+        }
+    }
+
+    private void handleRules(HttpExchange exchange) throws IOException {
+        try {
+            String path = exchange.getRequestURI().getPath();
+            String[] parts = path.split("/");
+            if (parts.length == 5 && "api".equals(parts[1]) && "rules".equals(parts[2])) {
+                String ruleId = parts[3];
+                RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
+                if ("validate".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
+                    HttpUtil.sendJson(exchange, 200, gitService.validate(configService.getConfig(), selection.project, selection.rule));
                     return;
                 }
-                if (parts.length == 5 && "diff".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
-                    MappingConfig mapping = Models.findMapping(configService.getConfig(), mappingId);
-                    HttpUtil.sendJson(exchange, 200, gitService.diff(configService.getConfig(), mapping));
+                if ("diff".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
+                    HttpUtil.sendJson(exchange, 200, gitService.diff(configService.getConfig(), selection.project, selection.rule));
                     return;
                 }
-                if (parts.length == 5 && "sync".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
+                if ("sync".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                     boolean forcePush = Models.booleanValue(body.getOrDefault("forcePush", Boolean.FALSE));
                     boolean reviewConfirmed = Models.booleanValue(body.getOrDefault("reviewConfirmed", Boolean.FALSE));
-                    HttpUtil.sendJson(exchange, 200, sync(mappingId, forcePush, reviewConfirmed, "manual"));
+                    HttpUtil.sendJson(exchange, 200, sync(ruleId, forcePush, reviewConfirmed, "manual"));
                     return;
                 }
-                if (parts.length == 5 && "schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
-                    Map<String, Object> body = HttpUtil.readJsonObject(exchange);
-                    MappingConfig mapping = Models.findMapping(configService.getConfig(), mappingId);
-                    mapping.schedule = Models.ScheduleConfig.fromMap(body);
-                    configService.upsertMapping(mapping);
+                if ("schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
+                    selection.rule.schedule = Models.ScheduleConfig.fromMap(HttpUtil.readJsonObject(exchange));
+                    configService.upsertRule(selection.project.id, selection.rule);
                     schedulerService.refreshScheduleState();
-                    HttpUtil.sendJson(exchange, 200, mapping.toMap());
+                    HttpUtil.sendJson(exchange, 200, selection.rule.toMap());
                     return;
                 }
             }
-
             HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
         } catch (Exception exception) {
             HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
@@ -208,21 +240,25 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             }
             List<Object> schedules = new ArrayList<>();
             AppConfig config = configService.getConfig();
-            for (MappingConfig mapping : config.mappings) {
-                MappingRuntimeState runtimeState = runtimeStateService.getOrCreate(mapping.id);
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", mapping.id);
-                item.put("name", mapping.name);
-                item.put("manualOnly", mapping.manualOnly);
-                item.put("reviewRequired", mapping.reviewRequired);
-                item.put("schedule", mapping.schedule.toMap());
-                item.put("lastRunAt", runtimeState.lastRunAt);
-                item.put("lastStatus", runtimeState.lastStatus);
-                item.put("lastRunSource", runtimeState.lastRunSource);
-                item.put("lastMessage", runtimeState.lastMessage);
-                item.put("lastLogPath", runtimeState.lastLogPath);
-                item.put("nextRunAt", runtimeState.nextRunAt);
-                schedules.add(item);
+            for (ProjectConfig project : config.projects) {
+                for (RuleConfig rule : project.rules) {
+                    RuleRuntimeState runtimeState = runtimeStateService.getOrCreate(rule.id);
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("projectId", project.id);
+                    item.put("projectName", project.name);
+                    item.put("id", rule.id);
+                    item.put("name", rule.name);
+                    item.put("manualOnly", rule.manualOnly);
+                    item.put("reviewRequired", rule.reviewRequired);
+                    item.put("schedule", rule.schedule.toMap());
+                    item.put("lastRunAt", runtimeState.lastRunAt);
+                    item.put("lastStatus", runtimeState.lastStatus);
+                    item.put("lastRunSource", runtimeState.lastRunSource);
+                    item.put("lastMessage", runtimeState.lastMessage);
+                    item.put("lastLogPath", runtimeState.lastLogPath);
+                    item.put("nextRunAt", runtimeState.nextRunAt);
+                    schedules.add(item);
+                }
             }
             HttpUtil.sendJson(exchange, 200, schedules);
         } catch (Exception exception) {
@@ -263,56 +299,68 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         HttpUtil.sendText(exchange, 200, contentType, Files.readString(file, StandardCharsets.UTF_8));
     }
 
-    private List<Object> mappingListView() {
+    private List<Object> projectListView() {
         List<Object> items = new ArrayList<>();
         AppConfig config = configService.getConfig();
-        for (MappingConfig mapping : config.mappings) {
-            MappingRuntimeState state = runtimeStateService.getOrCreate(mapping.id);
-            Map<String, Object> item = new LinkedHashMap<>(mapping.toMap());
-            RemoteConfig remote = Models.findRemote(config, mapping.targetRemoteId);
-            item.put("localRepoPath", mapping.displayLocalRepoPath());
-            item.put("targetRemoteName", remote.name);
-            item.put("targetRemoteBaseUrl", remote.baseUrl);
-            item.put("targetRemoteUrl", gitService.targetRemoteUrl(config, mapping));
-            item.put("lastRunAt", state.lastRunAt);
-            item.put("lastStatus", state.lastStatus);
-            item.put("lastRunSource", state.lastRunSource);
-            item.put("lastMessage", state.lastMessage);
-            item.put("lastLogPath", state.lastLogPath);
-            item.put("nextRunAt", state.nextRunAt);
-            item.put("running", state.running);
-            items.add(item);
+        for (ProjectConfig project : config.projects) {
+            Map<String, Object> projectItem = new LinkedHashMap<>(project.toMap());
+            projectItem.put("localRepoPath", project.displayLocalRepoPath());
+            List<Object> rules = new ArrayList<>();
+            for (RuleConfig rule : project.rules) {
+                RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
+                Map<String, Object> ruleItem = new LinkedHashMap<>(rule.toMap());
+                RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+                ruleItem.put("targetRemoteName", remote.name);
+                ruleItem.put("targetRemoteBaseUrl", remote.baseUrl);
+                ruleItem.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
+                ruleItem.put("lastRunAt", state.lastRunAt);
+                ruleItem.put("lastStatus", state.lastStatus);
+                ruleItem.put("lastRunSource", state.lastRunSource);
+                ruleItem.put("lastMessage", state.lastMessage);
+                ruleItem.put("lastLogPath", state.lastLogPath);
+                ruleItem.put("nextRunAt", state.nextRunAt);
+                ruleItem.put("running", state.running);
+                rules.add(ruleItem);
+            }
+            projectItem.put("rules", rules);
+            items.add(projectItem);
         }
         return items;
     }
 
-    private Map<String, Object> sync(String mappingId, boolean forcePush, boolean reviewConfirmed, String triggerSource)
+    private Map<String, Object> sync(String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource)
         throws Exception {
         AppConfig config = configService.getConfig();
-        MappingConfig mapping = Models.findMapping(config, mappingId);
-        ReentrantLock lock = repoLocks.computeIfAbsent(mapping.localRepoPath().toAbsolutePath().normalize().toString(),
+        RuleSelection selection = Models.findRuleSelection(config, ruleId);
+        ProjectConfig project = selection.project;
+        RuleConfig rule = selection.rule;
+        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath().toAbsolutePath().normalize().toString(),
             ignored -> new ReentrantLock());
         lock.lock();
         try {
-            runtimeStateService.markRunning(mappingId, true);
-            String runId = logService.createRunId(mappingId);
+            runtimeStateService.markRunning(rule.id, true);
+            String runId = logService.createRunId(rule.id);
             try {
-                GitService.SyncResult result = gitService.sync(config, mapping, forcePush, reviewConfirmed, triggerSource);
-                String logPath = logService.writeLog(runId, result.asLogText(mappingId, forcePush, reviewConfirmed, triggerSource));
-                String nextRun = mapping.manualOnly || !mapping.schedule.enabled ? null
+                GitService.SyncResult result = gitService.sync(config, project, rule, forcePush, reviewConfirmed, triggerSource);
+                String logPath = logService.writeLog(runId, result.asLogText(project.id, rule.id, forcePush, reviewConfirmed,
+                    triggerSource));
+                String nextRun = rule.manualOnly || !rule.schedule.enabled ? null
                     : java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8))
-                        .plusMinutes(mapping.schedule.intervalMinutes).toString();
-                runtimeStateService.markFinished(mappingId, "success", triggerSource, nextRun, logPath, "Sync completed");
+                        .plusMinutes(rule.schedule.intervalMinutes).toString();
+                runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, "Sync completed");
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
-                payload.put("mappingId", mappingId);
+                payload.put("projectId", project.id);
+                payload.put("projectName", project.name);
+                payload.put("ruleId", rule.id);
+                payload.put("ruleName", rule.name);
                 payload.put("status", "success");
-                payload.put("sourceBranch", mapping.sourceBranch);
-                payload.put("localRepoPath", mapping.displayLocalRepoPath());
-                payload.put("targetRemoteId", mapping.targetRemoteId);
-                payload.put("targetRepoName", mapping.targetRepoName);
-                payload.put("targetBranch", mapping.targetBranch);
-                payload.put("targetRemoteUrl", gitService.targetRemoteUrl(config, mapping));
+                payload.put("sourceBranch", rule.sourceBranch);
+                payload.put("localRepoPath", project.displayLocalRepoPath());
+                payload.put("targetRemoteId", rule.targetRemoteId);
+                payload.put("targetRepoName", rule.targetRepoName);
+                payload.put("targetBranch", rule.targetBranch);
+                payload.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
                 payload.put("forcePush", forcePush);
                 payload.put("reviewConfirmed", reviewConfirmed);
                 payload.put("message", "Sync completed");
@@ -320,7 +368,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 return payload;
             } catch (Exception exception) {
                 String logPath = logService.writeLog(runId, "ERROR\n" + exception.getMessage());
-                runtimeStateService.markFinished(mappingId, "failed", triggerSource, null, logPath, exception.getMessage());
+                runtimeStateService.markFinished(rule.id, "failed", triggerSource, null, logPath, exception.getMessage());
                 throw exception;
             }
         } finally {

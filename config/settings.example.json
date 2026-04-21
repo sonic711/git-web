@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-21T12:00:00+08:00",
+  "remotes": [
+    {
+      "id": "target-sit",
+      "name": "SIT",
+      "baseUrl": "ssh://git@example.com:222/team/",
+      "enabled": true
+    }
+  ],
+  "projects": [
+    {
+      "id": "fsap-adm",
+      "name": "fsap-adm",
+      "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+      "localWorkspaceRoot": "D:/git-workspace",
+      "localProjectName": "fsap-adm",
+      "enabled": true,
+      "rules": [
+        {
+          "id": "rule-sit",
+          "name": "SIT -> SIT",
+          "sourceBranch": "sit",
+          "targetRemoteId": "target-sit",
+          "targetRepoName": "fsap-adm.git",
+          "targetBranch": "sit",
+          "sameBranchNameExpected": true,
+          "enabled": true,
+          "allowForcePush": true,
+          "manualOnly": false,
+          "reviewRequired": false,
+          "schedule": {
+            "enabled": true,
+            "type": "fixed-interval",
+            "intervalMinutes": 1
+          }
+        }
+      ]
+    }
+  ]
+}

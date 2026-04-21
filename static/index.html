@@ -10,7 +10,7 @@
   <header class="hero">
     <div>
       <h1>Git Web Offline</h1>
-      <p>以 Mapping 為主的離線 Git 推送台，支援 review gate、排程與設定檔回寫</p>
+      <p>先建立專案，再為專案配置多條同步規則。</p>
     </div>
     <button id="refreshButton">重新整理</button>
   </header>
@@ -27,19 +27,19 @@
     <section class="panel">
       <div class="panel-head">
         <div>
-          <h2>Mappings</h2>
-          <p class="panel-copy">先建立 Mapping，再在列表上決定是否 Force Push 或啟用自動同步。</p>
+          <h2>Projects</h2>
+          <p class="panel-copy">每個專案共用同一份 vendor repo 與本地路徑，底下可以建立多條 branch 同步規則。</p>
         </div>
-        <button id="newMappingButton">新增 Mapping</button>
+        <button id="newProjectButton">新增專案</button>
       </div>
-      <div id="mappingTable"></div>
+      <div id="projectList"></div>
     </section>
 
     <section class="panel">
       <div class="panel-head">
         <div>
           <h2>Remote Tabs</h2>
-          <p class="panel-copy">每個頁籤代表一組目標倉庫模板，先設定 `base URL`，Mapping 只需填最後的專案名稱。</p>
+          <p class="panel-copy">每個頁籤保存共用 `base URL`，規則只需填最後的專案名稱 `.git`。</p>
         </div>
         <button id="newRemoteButton">新增 Remote Tab</button>
       </div>
@@ -59,19 +59,19 @@
     </section>
   </main>
 
-  <div id="mappingModal" class="modal hidden">
-    <div class="modal-backdrop" data-close-modal="mappingModal"></div>
+  <div id="projectModal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal="projectModal"></div>
     <section class="modal-card">
       <div class="modal-head">
         <div>
-          <h2 id="mappingModalTitle">新增 Mapping</h2>
-          <p class="panel-copy">建立規則後，回到列表再決定是否手動 Force Push 或啟用自動同步。</p>
+          <h2 id="projectModalTitle">新增專案</h2>
+          <p class="panel-copy">一個專案可對應多條同步規則，例如 `sit`、`sit2`、`uat`。</p>
         </div>
-        <button type="button" class="secondary icon-button" data-close-modal="mappingModal">關閉</button>
+        <button type="button" class="secondary icon-button" data-close-modal="projectModal">關閉</button>
       </div>
-      <form id="mappingForm" class="form-grid">
-        <input type="hidden" id="mappingId">
-        <label>名稱<input id="mappingName" required></label>
+      <form id="projectForm" class="form-grid">
+        <input type="hidden" id="projectId">
+        <label>專案名稱<input id="projectName" required></label>
         <label>廠商 Repo URL<input id="vendorRepoUrl" required></label>
         <label>本地主目錄
           <div class="picker-row">
@@ -80,10 +80,33 @@
           </div>
         </label>
         <label>本地專案資料夾名稱<input id="localProjectName" placeholder="project-name" required></label>
+        <label class="checkbox"><input type="checkbox" id="projectEnabled" checked>啟用專案</label>
         <div class="preview-box">
           <div class="preview-label">實際 Repo 路徑</div>
           <code id="localRepoPathPreview">請先選擇主目錄並輸入專案名稱</code>
         </div>
+        <div class="modal-actions">
+          <button type="button" class="secondary" data-close-modal="projectModal">取消</button>
+          <button type="submit">儲存專案</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="ruleModal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal="ruleModal"></div>
+    <section class="modal-card">
+      <div class="modal-head">
+        <div>
+          <h2 id="ruleModalTitle">新增同步規則</h2>
+          <p class="panel-copy">自動同步規則仍可手動同步，只有 `manualOnly` 會禁止排程。</p>
+        </div>
+        <button type="button" class="secondary icon-button" data-close-modal="ruleModal">關閉</button>
+      </div>
+      <form id="ruleForm" class="form-grid">
+        <input type="hidden" id="ruleProjectId">
+        <input type="hidden" id="ruleId">
+        <label>規則名稱<input id="ruleName" required></label>
         <label>來源 Branch<input id="sourceBranch" required></label>
         <label>目標頁籤模板<select id="targetRemoteId" required></select></label>
         <label>目標專案名稱<input id="targetRepoName" placeholder="project.git" required></label>
@@ -93,15 +116,15 @@
         </div>
         <label>目標 Branch<input id="targetBranch" required></label>
         <label class="checkbox"><input type="checkbox" id="sameBranchNameExpected">同名分支預設</label>
-        <label class="checkbox"><input type="checkbox" id="mappingEnabled" checked>啟用規則</label>
+        <label class="checkbox"><input type="checkbox" id="ruleEnabled" checked>啟用規則</label>
         <label class="checkbox"><input type="checkbox" id="allowForcePush">允許 Force Push</label>
         <label class="checkbox"><input type="checkbox" id="manualOnly">僅允許手動</label>
         <label class="checkbox"><input type="checkbox" id="reviewRequired">需要 Review</label>
         <label class="checkbox"><input type="checkbox" id="scheduleEnabled">啟用自動同步</label>
         <label>排程分鐘數<input type="number" id="intervalMinutes" min="1" value="30"></label>
         <div class="modal-actions">
-          <button type="button" class="secondary" data-close-modal="mappingModal">取消</button>
-          <button type="submit">儲存 Mapping</button>
+          <button type="button" class="secondary" data-close-modal="ruleModal">取消</button>
+          <button type="submit">儲存規則</button>
         </div>
       </form>
     </section>
@@ -113,7 +136,7 @@
       <div class="modal-head">
         <div>
           <h2 id="remoteModalTitle">新增 Remote Tab</h2>
-          <p class="panel-copy">Remote Tab 只保存頁籤名稱與 base URL；實際專案 `.git` 由 Mapping 補上。</p>
+          <p class="panel-copy">Remote Tab 只保存頁籤名稱與 base URL。</p>
         </div>
         <button type="button" class="secondary icon-button" data-close-modal="remoteModal">關閉</button>
       </div>

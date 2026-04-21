@@ -303,6 +303,31 @@ th {
   gap: 6px;
 }
 
+.project-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #eadfce;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.project-head h3 {
+  margin: 0 0 6px;
+}
+
+.project-meta {
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .row-controls {
   display: grid;
   gap: 6px;

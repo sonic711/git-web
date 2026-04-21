@@ -1,8 +1,8 @@
 const state = {
-  mappings: [],
+  projects: [],
   remotes: [],
   selectedRemoteTab: 'all',
-  selectedDiffMappingId: null,
+  selectedDiffRuleId: null,
   diffConfirmed: false,
   rowForcePush: {},
   autoRefreshTimer: null,
@@ -53,118 +53,150 @@ async function withLoading(message, action) {
   }
 }
 
-function mappingById(id) {
-  return state.mappings.find(item => item.id === id);
+function projectById(id) {
+  return state.projects.find(project => project.id === id);
+}
+
+function ruleSelection(ruleId) {
+  for (const project of state.projects) {
+    const rule = (project.rules || []).find(item => item.id === ruleId);
+    if (rule) {
+      return { project, rule };
+    }
+  }
+  return null;
 }
 
 function remoteById(id) {
   return state.remotes.find(item => item.id === id);
 }
 
-function remoteDisplayName(remote) {
-  return remote?.name || remote?.id || '-';
+function isReviewReady(ruleId) {
+  return state.selectedDiffRuleId === ruleId && state.diffConfirmed;
 }
 
-function isReviewReady(mappingId) {
-  return state.selectedDiffMappingId === mappingId && state.diffConfirmed;
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.body.classList.add('modal-open');
 }
 
-function renderTables() {
-  renderMappings();
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  if ([...document.querySelectorAll('.modal')].every(modal => modal.classList.contains('hidden'))) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
+function render() {
+  renderProjects();
   renderRemoteTabs();
   renderRemotes();
   renderRemoteOptions();
 }
 
-function renderMappings() {
-  const root = document.getElementById('mappingTable');
-  if (!state.mappings.length) {
-    root.innerHTML = '<div class="viewer empty">尚未建立 Mapping</div>';
+function renderProjects() {
+  const root = document.getElementById('projectList');
+  if (!state.projects.length) {
+    root.innerHTML = '<div class="viewer empty">尚未建立專案</div>';
     return;
   }
 
-  const rows = state.mappings.map(mapping => {
-    const statusClass = mapping.lastStatus === 'failed' ? 'failed'
-      : mapping.lastStatus === 'success' ? 'success'
-      : mapping.lastStatus === 'running' ? 'running' : '';
-    const reviewReady = isReviewReady(mapping.id);
-    const syncDisabled = mapping.reviewRequired && !reviewReady;
+  root.innerHTML = state.projects.map(project => {
+    const rules = project.rules || [];
+    const ruleRows = rules.length
+      ? rules.map(rule => renderRuleRow(project, rule)).join('')
+      : '<tr><td colspan="6" class="empty">尚未建立同步規則</td></tr>';
+
     return `
-      <tr>
-        <td>
-          <div class="stacked-copy">
-            <strong>${escapeHtml(mapping.name)}</strong>
+      <section class="project-card">
+        <div class="project-head">
+          <div>
+            <h3>${escapeHtml(project.name)}</h3>
+            <div class="project-meta">${escapeHtml(project.vendorRepoUrl)}</div>
+            <div class="project-meta">${escapeHtml(project.localRepoPath || '')}</div>
           </div>
-        </td>
-        <td>
-          <div class="stacked-copy">
-            <span>${escapeHtml(mapping.vendorRepoUrl)}</span>
-            <span><code>${escapeHtml(mapping.sourceBranch)}</code> -> <code>${escapeHtml(mapping.targetBranch)}</code></span>
+          <div class="inline-actions">
+            <button class="secondary" onclick="editProject('${escapeAttr(project.id)}')">編輯專案</button>
+            <button class="secondary" onclick="newRule('${escapeAttr(project.id)}')">新增規則</button>
+            <button class="secondary" onclick="deleteProject('${escapeAttr(project.id)}')">刪除專案</button>
           </div>
-        </td>
-        <td>
-          <div class="stacked-copy">
-            <strong>${escapeHtml(mapping.targetRemoteName || mapping.targetRemoteId)}</strong>
-            <span>${escapeHtml(mapping.targetRepoName)}</span>
-            <span>${escapeHtml(mapping.targetRemoteUrl || '-')}</span>
-          </div>
-        </td>
-        <td>
-          ${mapping.manualOnly ? '<span class="tag">Manual Only</span>' : ''}
-          ${mapping.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}
-          ${mapping.schedule?.enabled ? '<span class="tag">Auto Sync</span>' : ''}
-          ${mapping.allowForcePush ? '<span class="tag">Force Push Allowed</span>' : ''}
-        </td>
-        <td>
-          <span class="tag ${statusClass}">${escapeHtml(mapping.lastStatus || 'never')}</span>
-          <div class="status-copy">${escapeHtml(mapping.lastRunSource || '-')}</div>
-          <div class="status-copy">${escapeHtml(mapping.lastMessage || '')}</div>
-        </td>
-        <td>${escapeHtml(mapping.nextRunAt || '-')}</td>
-        <td>
-          <div class="row-controls">
-            <label class="mini-check">
-              <input type="checkbox"
-                ${mapping.allowForcePush ? '' : 'disabled'}
-                ${state.rowForcePush[mapping.id] ? 'checked' : ''}
-                onchange="setRowForcePush('${escapeAttr(mapping.id)}', this.checked)">
-              Force Push
-            </label>
-            <label class="mini-check">
-              <input type="checkbox"
-                ${mapping.manualOnly ? 'disabled' : ''}
-                ${mapping.schedule?.enabled ? 'checked' : ''}
-                onchange="toggleAutoSync('${escapeAttr(mapping.id)}', this.checked)">
-              自動同步
-            </label>
-            <div class="inline-actions">
-              <button class="secondary" onclick="editMapping('${escapeAttr(mapping.id)}')">編輯</button>
-              <button class="secondary" onclick="showDiff('${escapeAttr(mapping.id)}')">查看差異</button>
-              <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(mapping.id)}')">同步</button>
-              <button class="secondary" onclick="validateMapping('${escapeAttr(mapping.id)}')">驗證</button>
-              <button class="secondary" onclick="deleteMapping('${escapeAttr(mapping.id)}')">刪除</button>
-            </div>
-          </div>
-        </td>
-      </tr>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>規則</th>
+              <th>來源 / 目標</th>
+              <th>Remote</th>
+              <th>最後結果</th>
+              <th>下次排程</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>${ruleRows}</tbody>
+        </table>
+      </section>
     `;
   }).join('');
+}
 
-  root.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>規則</th>
-          <th>來源</th>
-          <th>目標</th>
-          <th>標記</th>
-          <th>最後結果</th>
-          <th>下次排程</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+function renderRuleRow(project, rule) {
+  const statusClass = rule.lastStatus === 'failed' ? 'failed'
+    : rule.lastStatus === 'success' ? 'success'
+    : rule.lastStatus === 'running' ? 'running' : '';
+  const reviewReady = isReviewReady(rule.id);
+  const syncDisabled = rule.reviewRequired && !reviewReady;
+  return `
+    <tr>
+      <td>
+        <div class="stacked-copy">
+          <strong>${escapeHtml(rule.name)}</strong>
+          <span>${rule.manualOnly ? '<span class="tag">Manual Only</span>' : ''}${rule.schedule?.enabled ? '<span class="tag">Auto Sync</span>' : ''}</span>
+        </div>
+      </td>
+      <td>
+        <div class="stacked-copy">
+          <span><code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code></span>
+          <span>${rule.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}</span>
+        </div>
+      </td>
+      <td>
+        <div class="stacked-copy">
+          <strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong>
+          <span>${escapeHtml(rule.targetRepoName)}</span>
+        </div>
+      </td>
+      <td>
+        <span class="tag ${statusClass}">${escapeHtml(rule.lastStatus || 'never')}</span>
+        <div class="status-copy">${escapeHtml(rule.lastRunSource || '-')}</div>
+        <div class="status-copy">${escapeHtml(rule.lastMessage || '')}</div>
+      </td>
+      <td>${escapeHtml(rule.nextRunAt || '-')}</td>
+      <td>
+        <div class="row-controls">
+          <label class="mini-check">
+            <input type="checkbox"
+              ${rule.allowForcePush ? '' : 'disabled'}
+              ${state.rowForcePush[rule.id] ? 'checked' : ''}
+              onchange="setRowForcePush('${escapeAttr(rule.id)}', this.checked)">
+            Force Push
+          </label>
+          <label class="mini-check">
+            <input type="checkbox"
+              ${rule.manualOnly ? 'disabled' : ''}
+              ${rule.schedule?.enabled ? 'checked' : ''}
+              onchange="toggleAutoSync('${escapeAttr(rule.id)}', this.checked)">
+            自動同步
+          </label>
+          <div class="inline-actions">
+            <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯</button>
+            <button class="secondary" onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
+            <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">同步</button>
+            <button class="secondary" onclick="validateRule('${escapeAttr(rule.id)}')">驗證</button>
+            <button class="secondary" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除</button>
+          </div>
+        </div>
+      </td>
+    </tr>
   `;
 }
 
@@ -186,24 +218,17 @@ function renderRemotes() {
     root.innerHTML = '<div class="viewer empty">尚未建立 Remote Tab</div>';
     return;
   }
-
   const filtered = state.selectedRemoteTab === 'all'
     ? state.remotes
     : state.remotes.filter(remote => remote.id === state.selectedRemoteTab);
-
   const rows = filtered.map(remote => {
-    const mappingCount = state.mappings.filter(mapping => mapping.targetRemoteId === remote.id).length;
+    const ruleCount = state.projects.flatMap(project => project.rules || []).filter(rule => rule.targetRemoteId === remote.id).length;
     return `
       <tr>
-        <td>
-          <div class="stacked-copy">
-            <strong>${escapeHtml(remote.name)}</strong>
-            <span>${escapeHtml(remote.id)}</span>
-          </div>
-        </td>
+        <td><strong>${escapeHtml(remote.name)}</strong><br>${escapeHtml(remote.id)}</td>
         <td>${escapeHtml(remote.baseUrl)}</td>
         <td>${remote.enabled ? 'enabled' : 'disabled'}</td>
-        <td>${mappingCount}</td>
+        <td>${ruleCount}</td>
         <td>
           <div class="inline-actions">
             <button class="secondary" onclick="editRemote('${escapeAttr(remote.id)}')">編輯</button>
@@ -213,18 +238,9 @@ function renderRemotes() {
       </tr>
     `;
   }).join('');
-
   root.innerHTML = `
     <table>
-      <thead>
-        <tr>
-          <th>Remote Tab</th>
-          <th>Base URL</th>
-          <th>狀態</th>
-          <th>Mappings</th>
-          <th>操作</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Remote Tab</th><th>Base URL</th><th>狀態</th><th>Rules</th><th>操作</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;
@@ -233,42 +249,13 @@ function renderRemotes() {
 function renderRemoteOptions() {
   const select = document.getElementById('targetRemoteId');
   const currentValue = select.value;
-  const options = state.remotes.map(remote =>
+  select.innerHTML = state.remotes.map(remote =>
     `<option value="${escapeAttr(remote.id)}">${escapeHtml(remote.name)}${remote.enabled ? '' : ' (disabled)'}</option>`
-  );
-  select.innerHTML = options.join('');
+  ).join('');
   if (currentValue && state.remotes.some(remote => remote.id === currentValue)) {
     select.value = currentValue;
   }
   updateTargetUrlPreview();
-}
-
-function openModal(id) {
-  document.getElementById(id).classList.remove('hidden');
-  document.body.classList.add('modal-open');
-}
-
-function closeModal(id) {
-  document.getElementById(id).classList.add('hidden');
-  if ([...document.querySelectorAll('.modal')].every(modal => modal.classList.contains('hidden'))) {
-    document.body.classList.remove('modal-open');
-  }
-}
-
-function updateTargetUrlPreview() {
-  const remote = remoteById(document.getElementById('targetRemoteId').value);
-  const repoName = document.getElementById('targetRepoName').value.trim();
-  const preview = document.getElementById('targetUrlPreview');
-  if (!remote) {
-    preview.textContent = '請先建立或選擇 Remote Tab';
-    return;
-  }
-  if (!repoName) {
-    preview.textContent = `${remote.baseUrl}project.git`;
-    return;
-  }
-  const separator = remote.baseUrl.endsWith('/') || remote.baseUrl.endsWith(':') ? '' : '/';
-  preview.textContent = `${remote.baseUrl}${separator}${repoName}`;
 }
 
 function updateLocalRepoPathPreview() {
@@ -283,15 +270,16 @@ function updateLocalRepoPathPreview() {
   preview.textContent = `${workspaceRoot}${separator}${projectName}`;
 }
 
-function deriveProjectNameFromUrl(repoUrl) {
-  const trimmed = String(repoUrl || '').trim();
-  if (!trimmed) {
-    return '';
+function updateTargetUrlPreview() {
+  const remote = remoteById(document.getElementById('targetRemoteId').value);
+  const repoName = document.getElementById('targetRepoName').value.trim();
+  const preview = document.getElementById('targetUrlPreview');
+  if (!remote) {
+    preview.textContent = '請先建立或選擇 Remote Tab';
+    return;
   }
-  const normalized = trimmed.split('?')[0].split('#')[0];
-  const parts = normalized.split(/[/:]/);
-  const last = parts[parts.length - 1] || '';
-  return last.endsWith('.git') ? last.slice(0, -4) : last;
+  const separator = remote.baseUrl.endsWith('/') || remote.baseUrl.endsWith(':') ? '' : '/';
+  preview.textContent = repoName ? `${remote.baseUrl}${separator}${repoName}` : `${remote.baseUrl}${separator}project.git`;
 }
 
 function updateRemoteExamplePreview() {
@@ -305,29 +293,106 @@ function updateRemoteExamplePreview() {
   preview.textContent = `${baseUrl}${separator}project.git`;
 }
 
-function editMapping(id) {
-  const mapping = mappingById(id);
-  if (!mapping) return;
-  document.getElementById('mappingModalTitle').textContent = '編輯 Mapping';
-  document.getElementById('mappingId').value = mapping.id;
-  document.getElementById('mappingName').value = mapping.name;
-  document.getElementById('vendorRepoUrl').value = mapping.vendorRepoUrl;
-  document.getElementById('localWorkspaceRoot').value = mapping.localWorkspaceRoot;
-  document.getElementById('localProjectName').value = mapping.localProjectName;
-  document.getElementById('sourceBranch').value = mapping.sourceBranch;
-  document.getElementById('targetRemoteId').value = mapping.targetRemoteId;
-  document.getElementById('targetRepoName').value = mapping.targetRepoName || '';
-  document.getElementById('targetBranch').value = mapping.targetBranch;
-  document.getElementById('sameBranchNameExpected').checked = !!mapping.sameBranchNameExpected;
-  document.getElementById('mappingEnabled').checked = !!mapping.enabled;
-  document.getElementById('allowForcePush').checked = !!mapping.allowForcePush;
-  document.getElementById('manualOnly').checked = !!mapping.manualOnly;
-  document.getElementById('reviewRequired').checked = !!mapping.reviewRequired;
-  document.getElementById('scheduleEnabled').checked = !!mapping.schedule?.enabled;
-  document.getElementById('intervalMinutes').value = mapping.schedule?.intervalMinutes || 30;
-  syncMappingFormRules();
+function deriveProjectNameFromUrl(repoUrl) {
+  const trimmed = String(repoUrl || '').trim();
+  if (!trimmed) return '';
+  const normalized = trimmed.split('?')[0].split('#')[0];
+  const parts = normalized.split(/[/:]/);
+  const last = parts[parts.length - 1] || '';
+  return last.endsWith('.git') ? last.slice(0, -4) : last;
+}
+
+function syncProjectFormRules() {
+  const vendorRepoUrl = document.getElementById('vendorRepoUrl').value;
+  const projectNameInput = document.getElementById('localProjectName');
+  if (!projectNameInput.value.trim() && vendorRepoUrl.trim()) {
+    projectNameInput.value = deriveProjectNameFromUrl(vendorRepoUrl);
+  }
   updateLocalRepoPathPreview();
-  openModal('mappingModal');
+}
+
+function syncRuleFormRules() {
+  const sameBranch = document.getElementById('sameBranchNameExpected').checked;
+  const manualOnly = document.getElementById('manualOnly').checked;
+  const sourceBranch = document.getElementById('sourceBranch').value;
+  const targetBranch = document.getElementById('targetBranch');
+  const scheduleEnabled = document.getElementById('scheduleEnabled');
+  const ruleName = document.getElementById('ruleName');
+  if (sameBranch && sourceBranch) {
+    targetBranch.value = sourceBranch;
+  }
+  if (!ruleName.value.trim() && sourceBranch.trim()) {
+    ruleName.value = `${sourceBranch} -> ${targetBranch.value || sourceBranch}`;
+  }
+  scheduleEnabled.disabled = manualOnly;
+  if (manualOnly) {
+    scheduleEnabled.checked = false;
+  }
+  updateTargetUrlPreview();
+}
+
+function newProject() {
+  document.getElementById('projectModalTitle').textContent = '新增專案';
+  document.getElementById('projectForm').reset();
+  document.getElementById('projectId').value = '';
+  document.getElementById('projectEnabled').checked = true;
+  updateLocalRepoPathPreview();
+  openModal('projectModal');
+}
+
+function editProject(projectId) {
+  const project = projectById(projectId);
+  if (!project) return;
+  document.getElementById('projectModalTitle').textContent = '編輯專案';
+  document.getElementById('projectId').value = project.id;
+  document.getElementById('projectName').value = project.name;
+  document.getElementById('vendorRepoUrl').value = project.vendorRepoUrl;
+  document.getElementById('localWorkspaceRoot').value = project.localWorkspaceRoot;
+  document.getElementById('localProjectName').value = project.localProjectName;
+  document.getElementById('projectEnabled').checked = !!project.enabled;
+  updateLocalRepoPathPreview();
+  openModal('projectModal');
+}
+
+function newRule(projectId) {
+  document.getElementById('ruleModalTitle').textContent = '新增同步規則';
+  document.getElementById('ruleForm').reset();
+  document.getElementById('ruleProjectId').value = projectId;
+  document.getElementById('ruleId').value = '';
+  document.getElementById('ruleEnabled').checked = true;
+  document.getElementById('intervalMinutes').value = 30;
+  const project = projectById(projectId);
+  if (project) {
+    document.getElementById('targetRepoName').value = `${project.localProjectName}.git`;
+  }
+  if (state.selectedRemoteTab !== 'all' && remoteById(state.selectedRemoteTab)) {
+    document.getElementById('targetRemoteId').value = state.selectedRemoteTab;
+  }
+  syncRuleFormRules();
+  openModal('ruleModal');
+}
+
+function editRule(projectId, ruleId) {
+  const selection = ruleSelection(ruleId);
+  if (!selection) return;
+  const { project, rule } = selection;
+  document.getElementById('ruleModalTitle').textContent = '編輯同步規則';
+  document.getElementById('ruleProjectId').value = projectId || project.id;
+  document.getElementById('ruleId').value = rule.id;
+  document.getElementById('ruleName').value = rule.name;
+  document.getElementById('sourceBranch').value = rule.sourceBranch;
+  document.getElementById('targetRemoteId').value = rule.targetRemoteId;
+  document.getElementById('targetRepoName').value = rule.targetRepoName;
+  document.getElementById('targetBranch').value = rule.targetBranch;
+  document.getElementById('sameBranchNameExpected').checked = !!rule.sameBranchNameExpected;
+  document.getElementById('ruleEnabled').checked = !!rule.enabled;
+  document.getElementById('allowForcePush').checked = !!rule.allowForcePush;
+  document.getElementById('manualOnly').checked = !!rule.manualOnly;
+  document.getElementById('reviewRequired').checked = !!rule.reviewRequired;
+  document.getElementById('scheduleEnabled').checked = !!rule.schedule?.enabled;
+  document.getElementById('intervalMinutes').value = rule.schedule?.intervalMinutes || 30;
+  syncRuleFormRules();
+  openModal('ruleModal');
 }
 
 function editRemote(id) {
@@ -344,21 +409,6 @@ function editRemote(id) {
   openModal('remoteModal');
 }
 
-function newMapping() {
-  document.getElementById('mappingModalTitle').textContent = '新增 Mapping';
-  document.getElementById('mappingForm').reset();
-  document.getElementById('mappingId').value = '';
-  document.getElementById('mappingEnabled').checked = true;
-  document.getElementById('intervalMinutes').value = 30;
-  if (state.selectedRemoteTab !== 'all' && remoteById(state.selectedRemoteTab)) {
-    document.getElementById('targetRemoteId').value = state.selectedRemoteTab;
-  }
-  syncMappingFormRules();
-  updateLocalRepoPathPreview();
-  updateTargetUrlPreview();
-  openModal('mappingModal');
-}
-
 function newRemote() {
   document.getElementById('remoteModalTitle').textContent = '新增 Remote Tab';
   document.getElementById('remoteForm').reset();
@@ -369,46 +419,21 @@ function newRemote() {
   openModal('remoteModal');
 }
 
-function syncMappingFormRules() {
-  const sameBranch = document.getElementById('sameBranchNameExpected').checked;
-  const manualOnly = document.getElementById('manualOnly').checked;
-  const sourceBranch = document.getElementById('sourceBranch').value;
-  const targetBranch = document.getElementById('targetBranch');
-  const scheduleEnabled = document.getElementById('scheduleEnabled');
-  if (sameBranch && sourceBranch) {
-    targetBranch.value = sourceBranch;
-  }
-  scheduleEnabled.disabled = manualOnly;
-  if (manualOnly) {
-    scheduleEnabled.checked = false;
-  }
-  const vendorRepoUrl = document.getElementById('vendorRepoUrl').value;
-  const projectNameInput = document.getElementById('localProjectName');
-  if (!projectNameInput.value.trim() && vendorRepoUrl.trim()) {
-    projectNameInput.value = deriveProjectNameFromUrl(vendorRepoUrl);
-  }
-  updateLocalRepoPathPreview();
-  updateTargetUrlPreview();
-}
-
 async function loadAll(options = {}) {
   const silent = !!options.silent;
   const run = async () => {
-    const [mappings, remotes] = await Promise.all([
-      api('/api/mappings'),
+    const [projects, remotes] = await Promise.all([
+      api('/api/projects'),
       api('/api/remotes'),
     ]);
-    state.mappings = mappings;
+    state.projects = projects;
     state.remotes = remotes;
     if (state.selectedRemoteTab !== 'all' && !state.remotes.some(remote => remote.id === state.selectedRemoteTab)) {
       state.selectedRemoteTab = 'all';
     }
-    renderTables();
+    render();
   };
-  if (silent) {
-    return run();
-  }
-  return withLoading('重新載入資料中...', run);
+  return silent ? run() : withLoading('重新載入資料中...', run);
 }
 
 async function pickDirectory() {
@@ -423,22 +448,45 @@ async function pickDirectory() {
   }
 }
 
-async function saveMapping(event) {
+async function saveProject(event) {
   event.preventDefault();
   try {
-    const id = document.getElementById('mappingId').value || `map-${Date.now()}`;
+    const id = document.getElementById('projectId').value || ModelsId.project();
+    const existing = projectById(id);
     const payload = {
       id,
-      name: document.getElementById('mappingName').value,
+      name: document.getElementById('projectName').value,
       vendorRepoUrl: document.getElementById('vendorRepoUrl').value,
       localWorkspaceRoot: document.getElementById('localWorkspaceRoot').value,
       localProjectName: document.getElementById('localProjectName').value,
+      enabled: document.getElementById('projectEnabled').checked,
+      rules: existing?.rules?.map(stripRuntimeFieldsFromRule) || [],
+    };
+    await withLoading('儲存專案中...', () =>
+      api(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    );
+    await loadAll({ silent: true });
+    closeModal('projectModal');
+    showToast('專案已儲存', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function saveRule(event) {
+  event.preventDefault();
+  try {
+    const projectId = document.getElementById('ruleProjectId').value;
+    const ruleId = document.getElementById('ruleId').value || ModelsId.rule();
+    const payload = {
+      id: ruleId,
+      name: document.getElementById('ruleName').value,
       sourceBranch: document.getElementById('sourceBranch').value,
       targetRemoteId: document.getElementById('targetRemoteId').value,
       targetRepoName: document.getElementById('targetRepoName').value,
       targetBranch: document.getElementById('targetBranch').value,
       sameBranchNameExpected: document.getElementById('sameBranchNameExpected').checked,
-      enabled: document.getElementById('mappingEnabled').checked,
+      enabled: document.getElementById('ruleEnabled').checked,
       allowForcePush: document.getElementById('allowForcePush').checked,
       manualOnly: document.getElementById('manualOnly').checked,
       reviewRequired: document.getElementById('reviewRequired').checked,
@@ -448,12 +496,12 @@ async function saveMapping(event) {
         intervalMinutes: Number(document.getElementById('intervalMinutes').value || 30),
       },
     };
-    await withLoading('儲存 Mapping 中...', () =>
-      api(`/api/mappings/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    await withLoading('儲存同步規則中...', () =>
+      api(`/api/projects/${projectId}/rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(payload) })
     );
     await loadAll({ silent: true });
-    closeModal('mappingModal');
-    showToast('Mapping 已儲存', 'success');
+    closeModal('ruleModal');
+    showToast('同步規則已儲存', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -488,20 +536,20 @@ async function saveRemote(event) {
   }
 }
 
-async function toggleAutoSync(id, enabled) {
+async function toggleAutoSync(ruleId, enabled) {
   try {
-    const mapping = mappingById(id);
-    if (!mapping) return;
-    if (mapping.manualOnly && enabled) {
+    const selection = ruleSelection(ruleId);
+    if (!selection) return;
+    if (selection.rule.manualOnly && enabled) {
       throw new Error('Manual Only 規則不可啟用自動同步');
     }
     await withLoading(`正在${enabled ? '啟用' : '停用'}自動同步...`, () =>
-      api(`/api/mappings/${id}/schedule`, {
+      api(`/api/rules/${ruleId}/schedule`, {
         method: 'PUT',
         body: JSON.stringify({
           enabled,
           type: 'fixed-interval',
-          intervalMinutes: mapping.schedule?.intervalMinutes || 30,
+          intervalMinutes: selection.rule.schedule?.intervalMinutes || 30,
         }),
       })
     );
@@ -512,14 +560,14 @@ async function toggleAutoSync(id, enabled) {
   }
 }
 
-function setRowForcePush(id, checked) {
-  state.rowForcePush[id] = checked;
+function setRowForcePush(ruleId, checked) {
+  state.rowForcePush[ruleId] = checked;
 }
 
-async function validateMapping(id) {
+async function validateRule(ruleId) {
   try {
-    const data = await withLoading('驗證 Mapping 中...', () =>
-      api(`/api/mappings/${id}/validate`, { method: 'POST' })
+    const data = await withLoading('驗證同步規則中...', () =>
+      api(`/api/rules/${ruleId}/validate`, { method: 'POST' })
     );
     document.getElementById('logView').textContent = JSON.stringify(data, null, 2);
     showToast(data.ok ? '驗證成功' : '驗證失敗', data.ok ? 'success' : 'error');
@@ -528,52 +576,54 @@ async function validateMapping(id) {
   }
 }
 
-async function showDiff(id) {
+async function showDiff(ruleId) {
   try {
-    const mapping = mappingById(id);
+    const selection = ruleSelection(ruleId);
     const data = await withLoading('載入差異中...', () =>
-      api(`/api/mappings/${id}/diff`, { method: 'POST' })
+      api(`/api/rules/${ruleId}/diff`, { method: 'POST' })
     );
-    state.selectedDiffMappingId = id;
+    state.selectedDiffRuleId = ruleId;
     state.diffConfirmed = false;
     const commitLines = data.commits.map(item =>
       `<li><code>${escapeHtml(item.id)}</code> ${escapeHtml(item.title)}</li>`).join('');
     const fileLines = (data.files || []).map(item =>
       `<li><code>${escapeHtml(item.status)}</code> ${escapeHtml(item.path)}</li>`).join('');
     document.getElementById('diffView').innerHTML = `
-      <div class="section"><strong>Mapping:</strong> ${escapeHtml(mapping?.name || id)}</div>
+      <div class="section"><strong>Project:</strong> ${escapeHtml(data.projectName || selection?.project?.name || '-')}</div>
+      <div class="section"><strong>Rule:</strong> ${escapeHtml(data.ruleName || selection?.rule?.name || ruleId)}</div>
       <div class="section"><strong>Source:</strong> ${escapeHtml(data.sourceBranch)} | <strong>Target:</strong> ${escapeHtml(data.targetBranch)}</div>
       <div class="section"><strong>Remote:</strong> ${escapeHtml(data.targetRemoteName || '-')} | <strong>Repo:</strong> ${escapeHtml(data.targetRepoName || '-')}</div>
       <div class="section"><strong>URL:</strong> ${escapeHtml(data.targetRemoteUrl || '-')}</div>
       <div class="section"><strong>Ahead commits:</strong> ${escapeHtml(data.summary.aheadCommits)} | <strong>Changed files:</strong> ${escapeHtml(data.summary.changedFiles)}</div>
       <div class="section"><strong>Commits</strong><ul>${commitLines || '<li>(none)</li>'}</ul></div>
       <div class="section"><strong>Files</strong><ul>${fileLines || '<li>(none)</li>'}</ul></div>
-      <div class="section"><button onclick="confirmDiffReview('${escapeAttr(id)}')">人工確認本次同步</button></div>
+      <div class="section"><button onclick="confirmDiffReview('${escapeAttr(ruleId)}')">人工確認本次同步</button></div>
     `;
-    renderMappings();
+    renderProjects();
     showToast('差異已載入', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
 }
 
-function confirmDiffReview(id) {
-  state.selectedDiffMappingId = id;
+function confirmDiffReview(ruleId) {
+  state.selectedDiffRuleId = ruleId;
   state.diffConfirmed = true;
-  renderMappings();
+  renderProjects();
   showToast('已完成本次人工確認', 'success');
 }
 
-async function runSync(id) {
+async function runSync(ruleId) {
   try {
-    const mapping = mappingById(id);
-    const forcePush = !!state.rowForcePush[id] && !!mapping.allowForcePush;
-    const reviewConfirmed = !mapping.reviewRequired || isReviewReady(id);
-    if (mapping.reviewRequired && !reviewConfirmed) {
+    const selection = ruleSelection(ruleId);
+    if (!selection) return;
+    const forcePush = !!state.rowForcePush[ruleId] && !!selection.rule.allowForcePush;
+    const reviewConfirmed = !selection.rule.reviewRequired || isReviewReady(ruleId);
+    if (selection.rule.reviewRequired && !reviewConfirmed) {
       throw new Error('這筆規則需要先查看差異並完成人工確認');
     }
     const result = await withLoading('同步中，請稍候...', () =>
-      api(`/api/mappings/${id}/sync`, {
+      api(`/api/rules/${ruleId}/sync`, {
         method: 'POST',
         body: JSON.stringify({ forcePush, reviewConfirmed }),
       })
@@ -589,22 +639,38 @@ async function runSync(id) {
   }
 }
 
-async function deleteMapping(id) {
+async function deleteProject(projectId) {
   try {
-    const mapping = mappingById(id);
-    if (!confirm(`確定要刪除 Mapping ${mapping?.name || id} 嗎？`)) {
+    const project = projectById(projectId);
+    if (!confirm(`確定要刪除專案 ${project?.name || projectId} 嗎？`)) {
       return;
     }
-    await withLoading('刪除 Mapping 中...', () =>
-      api(`/api/mappings/${id}`, { method: 'DELETE' })
+    await withLoading('刪除專案中...', () =>
+      api(`/api/projects/${projectId}`, { method: 'DELETE' })
     );
-    if (state.selectedDiffMappingId === id) {
-      state.selectedDiffMappingId = null;
+    await loadAll({ silent: true });
+    showToast('專案已刪除', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function deleteRule(projectId, ruleId) {
+  try {
+    const selection = ruleSelection(ruleId);
+    if (!confirm(`確定要刪除同步規則 ${selection?.rule?.name || ruleId} 嗎？`)) {
+      return;
+    }
+    await withLoading('刪除同步規則中...', () =>
+      api(`/api/projects/${projectId}/rules/${ruleId}`, { method: 'DELETE' })
+    );
+    if (state.selectedDiffRuleId === ruleId) {
+      state.selectedDiffRuleId = null;
       state.diffConfirmed = false;
       document.getElementById('diffView').textContent = '尚未載入差異';
     }
     await loadAll({ silent: true });
-    showToast('Mapping 已刪除', 'success');
+    showToast('同步規則已刪除', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -612,15 +678,9 @@ async function deleteMapping(id) {
 
 async function deleteRemote(id) {
   try {
-    if (!confirm(`確定要刪除 Remote Tab ${id} 嗎？`)) {
-      return;
-    }
-    await withLoading('刪除 Remote Tab 中...', () =>
-      api(`/api/remotes/${id}`, { method: 'DELETE' })
-    );
-    if (state.selectedRemoteTab === id) {
-      state.selectedRemoteTab = 'all';
-    }
+    if (!confirm(`確定要刪除 Remote Tab ${id} 嗎？`)) return;
+    await withLoading('刪除 Remote Tab 中...', () => api(`/api/remotes/${id}`, { method: 'DELETE' }));
+    if (state.selectedRemoteTab === id) state.selectedRemoteTab = 'all';
     await loadAll({ silent: true });
     showToast('Remote Tab 已刪除', 'success');
   } catch (error) {
@@ -652,6 +712,32 @@ async function loadLog(runId) {
   }
 }
 
+function stripRuntimeFieldsFromRule(rule) {
+  return {
+    id: rule.id,
+    name: rule.name,
+    sourceBranch: rule.sourceBranch,
+    targetRemoteId: rule.targetRemoteId,
+    targetRepoName: rule.targetRepoName,
+    targetBranch: rule.targetBranch,
+    sameBranchNameExpected: !!rule.sameBranchNameExpected,
+    enabled: !!rule.enabled,
+    allowForcePush: !!rule.allowForcePush,
+    manualOnly: !!rule.manualOnly,
+    reviewRequired: !!rule.reviewRequired,
+    schedule: rule.schedule || { enabled: false, type: 'fixed-interval', intervalMinutes: 30 },
+  };
+}
+
+const ModelsId = {
+  project() {
+    return `project-${Date.now()}`;
+  },
+  rule() {
+    return `rule-${Date.now()}`;
+  },
+};
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -665,20 +751,22 @@ function escapeAttr(value) {
   return escapeHtml(value).replaceAll('`', '&#96;');
 }
 
-document.getElementById('mappingForm').addEventListener('submit', saveMapping);
+document.getElementById('projectForm').addEventListener('submit', saveProject);
+document.getElementById('ruleForm').addEventListener('submit', saveRule);
 document.getElementById('remoteForm').addEventListener('submit', saveRemote);
-document.getElementById('newMappingButton').addEventListener('click', newMapping);
+document.getElementById('newProjectButton').addEventListener('click', newProject);
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
-document.getElementById('refreshButton').addEventListener('click', loadAll);
+document.getElementById('refreshButton').addEventListener('click', () => loadAll());
 document.getElementById('pickDirectoryButton').addEventListener('click', pickDirectory);
-document.getElementById('sameBranchNameExpected').addEventListener('change', syncMappingFormRules);
-document.getElementById('vendorRepoUrl').addEventListener('input', syncMappingFormRules);
-document.getElementById('sourceBranch').addEventListener('input', syncMappingFormRules);
-document.getElementById('manualOnly').addEventListener('change', syncMappingFormRules);
+document.getElementById('vendorRepoUrl').addEventListener('input', syncProjectFormRules);
 document.getElementById('localWorkspaceRoot').addEventListener('input', updateLocalRepoPathPreview);
 document.getElementById('localProjectName').addEventListener('input', updateLocalRepoPathPreview);
+document.getElementById('sameBranchNameExpected').addEventListener('change', syncRuleFormRules);
+document.getElementById('sourceBranch').addEventListener('input', syncRuleFormRules);
+document.getElementById('manualOnly').addEventListener('change', syncRuleFormRules);
 document.getElementById('targetRemoteId').addEventListener('change', updateTargetUrlPreview);
 document.getElementById('targetRepoName').addEventListener('input', updateTargetUrlPreview);
+document.getElementById('targetBranch').addEventListener('input', syncRuleFormRules);
 document.getElementById('remoteBaseUrl').addEventListener('input', updateRemoteExamplePreview);
 
 document.querySelectorAll('[data-close-modal]').forEach(button => {
@@ -693,14 +781,17 @@ startAutoRefresh();
 updateRemoteExamplePreview();
 updateLocalRepoPathPreview();
 
-window.editMapping = editMapping;
+window.editProject = editProject;
+window.newRule = newRule;
+window.editRule = editRule;
 window.editRemote = editRemote;
 window.showDiff = showDiff;
 window.runSync = runSync;
-window.validateMapping = validateMapping;
+window.validateRule = validateRule;
 window.toggleAutoSync = toggleAutoSync;
 window.setRowForcePush = setRowForcePush;
 window.selectRemoteTab = selectRemoteTab;
-window.deleteMapping = deleteMapping;
+window.deleteProject = deleteProject;
+window.deleteRule = deleteRule;
 window.deleteRemote = deleteRemote;
 window.confirmDiffReview = confirmDiffReview;

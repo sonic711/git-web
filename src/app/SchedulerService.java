@@ -1,8 +1,9 @@
 package app;
 
 import app.Models.AppConfig;
-import app.Models.MappingConfig;
-import app.Models.MappingRuntimeState;
+import app.Models.ProjectConfig;
+import app.Models.RuleConfig;
+import app.Models.RuleRuntimeState;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -32,27 +33,34 @@ final class SchedulerService {
 
     void refreshScheduleState() throws IOException {
         AppConfig config = configService.getConfig();
-        for (MappingConfig mapping : config.mappings) {
-            String nextRun = computeNextRun(mapping);
-            runtimeStateService.setNextRun(mapping.id, nextRun);
+        for (ProjectConfig project : config.projects) {
+            for (RuleConfig rule : project.rules) {
+                String nextRun = computeNextRun(rule);
+                runtimeStateService.setNextRun(rule.id, nextRun);
+            }
         }
     }
 
     private void tick() {
         try {
             AppConfig config = configService.getConfig();
-            for (MappingConfig mapping : config.mappings) {
-                if (!mapping.enabled || mapping.manualOnly || !mapping.schedule.enabled) {
+            for (ProjectConfig project : config.projects) {
+                if (!project.enabled) {
                     continue;
                 }
-                MappingRuntimeState state = runtimeStateService.getOrCreate(mapping.id);
-                if (state.running) {
-                    continue;
-                }
-                OffsetDateTime now = OffsetDateTime.now(ZoneOffset.ofHours(8));
-                OffsetDateTime nextRun = parseTime(state.nextRunAt);
-                if (nextRun == null || !now.isBefore(nextRun)) {
-                    syncOrchestrator.runScheduledSync(mapping.id);
+                for (RuleConfig rule : project.rules) {
+                    if (!rule.enabled || rule.manualOnly || !rule.schedule.enabled) {
+                        continue;
+                    }
+                    RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
+                    if (state.running) {
+                        continue;
+                    }
+                    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.ofHours(8));
+                    OffsetDateTime nextRun = parseTime(state.nextRunAt);
+                    if (nextRun == null || !now.isBefore(nextRun)) {
+                        syncOrchestrator.runScheduledSync(rule.id);
+                    }
                 }
             }
         } catch (Exception exception) {
@@ -60,12 +68,12 @@ final class SchedulerService {
         }
     }
 
-    private String computeNextRun(MappingConfig mapping) {
-        if (mapping.manualOnly || !mapping.schedule.enabled) {
+    private String computeNextRun(RuleConfig rule) {
+        if (rule.manualOnly || !rule.schedule.enabled) {
             return null;
         }
         return OffsetDateTime.now(ZoneOffset.ofHours(8))
-            .plusMinutes(mapping.schedule.intervalMinutes)
+            .plusMinutes(rule.schedule.intervalMinutes)
             .toString();
     }
 

@@ -22,7 +22,7 @@ final class Models {
         int version = 1;
         String updatedAt = nowIso();
         List<RemoteConfig> remotes = new ArrayList<>();
-        List<MappingConfig> mappings = new ArrayList<>();
+        List<ProjectConfig> projects = new ArrayList<>();
 
         static AppConfig fromMap(Map<String, Object> map) {
             AppConfig config = new AppConfig();
@@ -31,8 +31,11 @@ final class Models {
             for (Object item : Json.asList(map.getOrDefault("remotes", List.of()))) {
                 config.remotes.add(RemoteConfig.fromMap(Json.asObject(item)));
             }
+            for (Object item : Json.asList(map.getOrDefault("projects", List.of()))) {
+                config.projects.add(ProjectConfig.fromMap(Json.asObject(item)));
+            }
             for (Object item : Json.asList(map.getOrDefault("mappings", List.of()))) {
-                config.mappings.add(MappingConfig.fromMap(Json.asObject(item)));
+                config.projects.add(ProjectConfig.fromLegacyMappingMap(Json.asObject(item)));
             }
             return config;
         }
@@ -46,11 +49,11 @@ final class Models {
                 remoteList.add(remote.toMap());
             }
             map.put("remotes", remoteList);
-            List<Object> mappingList = new ArrayList<>();
-            for (MappingConfig mapping : mappings) {
-                mappingList.add(mapping.toMap());
+            List<Object> projectList = new ArrayList<>();
+            for (ProjectConfig project : projects) {
+                projectList.add(project.toMap());
             }
-            map.put("mappings", mappingList);
+            map.put("projects", projectList);
             return map;
         }
     }
@@ -84,7 +87,142 @@ final class Models {
         }
     }
 
-    static final class MappingConfig {
+    static final class ProjectConfig {
+        String id;
+        String name;
+        String vendorRepoUrl;
+        String localWorkspaceRoot;
+        String localProjectName;
+        String legacyLocalRepoPath;
+        boolean enabled = true;
+        List<RuleConfig> rules = new ArrayList<>();
+
+        static ProjectConfig fromMap(Map<String, Object> map) {
+            ProjectConfig config = new ProjectConfig();
+            config.id = stringValue(map.get("id"));
+            config.name = stringValue(map.get("name"));
+            config.vendorRepoUrl = stringValue(map.get("vendorRepoUrl"));
+            config.legacyLocalRepoPath = nullableString(map.get("localRepoPath"));
+            config.localWorkspaceRoot = nullableString(map.get("localWorkspaceRoot"));
+            config.localProjectName = nullableString(map.get("localProjectName"));
+            config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
+            for (Object item : Json.asList(map.getOrDefault("rules", List.of()))) {
+                config.rules.add(RuleConfig.fromMap(Json.asObject(item)));
+            }
+            return config;
+        }
+
+        static ProjectConfig fromLegacyMappingMap(Map<String, Object> map) {
+            LegacyMappingConfig legacy = LegacyMappingConfig.fromMap(map);
+            ProjectConfig project = new ProjectConfig();
+            project.id = firstNonBlank(nullableString(map.get("projectId")),
+                slugify(firstNonBlank(nullableString(map.get("localProjectName")),
+                    stripGitSuffix(extractRepoName(legacy.vendorRepoUrl)), legacy.id)));
+            project.name = firstNonBlank(nullableString(map.get("projectName")), legacy.name, project.id);
+            project.vendorRepoUrl = legacy.vendorRepoUrl;
+            project.localWorkspaceRoot = legacy.localWorkspaceRoot;
+            project.localProjectName = legacy.localProjectName;
+            project.legacyLocalRepoPath = legacy.legacyLocalRepoPath;
+            project.enabled = legacy.enabled;
+            project.rules.add(RuleConfig.fromLegacyMapping(legacy));
+            return project;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", id);
+            map.put("name", name);
+            map.put("vendorRepoUrl", vendorRepoUrl);
+            map.put("localWorkspaceRoot", localWorkspaceRoot);
+            map.put("localProjectName", localProjectName);
+            map.put("enabled", enabled);
+            List<Object> ruleList = new ArrayList<>();
+            for (RuleConfig rule : rules) {
+                ruleList.add(rule.toMap());
+            }
+            map.put("rules", ruleList);
+            return map;
+        }
+
+        Path localRepoPath() {
+            return Path.of(localWorkspaceRoot).resolve(localProjectName);
+        }
+
+        String displayLocalRepoPath() {
+            return localRepoPath().toString();
+        }
+    }
+
+    static final class RuleConfig {
+        String id;
+        String name;
+        String sourceBranch;
+        String targetRemoteId;
+        String targetRepoName;
+        String targetBranch;
+        boolean sameBranchNameExpected;
+        boolean enabled = true;
+        boolean allowForcePush;
+        boolean manualOnly;
+        boolean reviewRequired;
+        ScheduleConfig schedule = new ScheduleConfig();
+
+        static RuleConfig fromMap(Map<String, Object> map) {
+            RuleConfig config = new RuleConfig();
+            config.id = stringValue(map.get("id"));
+            config.name = stringValue(map.getOrDefault("name", map.get("id")));
+            config.sourceBranch = stringValue(map.get("sourceBranch"));
+            config.targetRemoteId = stringValue(map.get("targetRemoteId"));
+            config.targetRepoName = nullableString(map.get("targetRepoName"));
+            config.targetBranch = stringValue(map.get("targetBranch"));
+            config.sameBranchNameExpected = booleanValue(map.getOrDefault("sameBranchNameExpected", Boolean.FALSE));
+            config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
+            config.allowForcePush = booleanValue(map.getOrDefault("allowForcePush", Boolean.FALSE));
+            config.manualOnly = booleanValue(map.getOrDefault("manualOnly", Boolean.FALSE));
+            config.reviewRequired = booleanValue(map.getOrDefault("reviewRequired", Boolean.FALSE));
+            Object scheduleObject = map.get("schedule");
+            if (scheduleObject instanceof Map<?, ?> scheduleMap) {
+                config.schedule = ScheduleConfig.fromMap(Json.asObject(scheduleMap));
+            }
+            return config;
+        }
+
+        static RuleConfig fromLegacyMapping(LegacyMappingConfig legacy) {
+            RuleConfig rule = new RuleConfig();
+            rule.id = legacy.id;
+            rule.name = firstNonBlank(legacy.ruleName, legacy.sourceBranch + " -> " + legacy.targetBranch, legacy.id);
+            rule.sourceBranch = legacy.sourceBranch;
+            rule.targetRemoteId = legacy.targetRemoteId;
+            rule.targetRepoName = legacy.targetRepoName;
+            rule.targetBranch = legacy.targetBranch;
+            rule.sameBranchNameExpected = legacy.sameBranchNameExpected;
+            rule.enabled = legacy.enabled;
+            rule.allowForcePush = legacy.allowForcePush;
+            rule.manualOnly = legacy.manualOnly;
+            rule.reviewRequired = legacy.reviewRequired;
+            rule.schedule = legacy.schedule;
+            return rule;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", id);
+            map.put("name", name);
+            map.put("sourceBranch", sourceBranch);
+            map.put("targetRemoteId", targetRemoteId);
+            map.put("targetRepoName", targetRepoName);
+            map.put("targetBranch", targetBranch);
+            map.put("sameBranchNameExpected", sameBranchNameExpected);
+            map.put("enabled", enabled);
+            map.put("allowForcePush", allowForcePush);
+            map.put("manualOnly", manualOnly);
+            map.put("reviewRequired", reviewRequired);
+            map.put("schedule", schedule.toMap());
+            return map;
+        }
+    }
+
+    static final class LegacyMappingConfig {
         String id;
         String name;
         String vendorRepoUrl;
@@ -96,16 +234,18 @@ final class Models {
         String targetRepoName;
         String targetBranch;
         boolean sameBranchNameExpected;
-        boolean enabled;
+        boolean enabled = true;
         boolean allowForcePush;
         boolean manualOnly;
         boolean reviewRequired;
         ScheduleConfig schedule = new ScheduleConfig();
+        String ruleName;
 
-        static MappingConfig fromMap(Map<String, Object> map) {
-            MappingConfig config = new MappingConfig();
+        static LegacyMappingConfig fromMap(Map<String, Object> map) {
+            LegacyMappingConfig config = new LegacyMappingConfig();
             config.id = stringValue(map.get("id"));
             config.name = stringValue(map.get("name"));
+            config.ruleName = nullableString(map.get("ruleName"));
             config.vendorRepoUrl = stringValue(map.get("vendorRepoUrl"));
             config.legacyLocalRepoPath = nullableString(map.get("localRepoPath"));
             config.localWorkspaceRoot = nullableString(map.get("localWorkspaceRoot"));
@@ -124,34 +264,6 @@ final class Models {
                 config.schedule = ScheduleConfig.fromMap(Json.asObject(scheduleMap));
             }
             return config;
-        }
-
-        Map<String, Object> toMap() {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", id);
-            map.put("name", name);
-            map.put("vendorRepoUrl", vendorRepoUrl);
-            map.put("localWorkspaceRoot", localWorkspaceRoot);
-            map.put("localProjectName", localProjectName);
-            map.put("sourceBranch", sourceBranch);
-            map.put("targetRemoteId", targetRemoteId);
-            map.put("targetRepoName", targetRepoName);
-            map.put("targetBranch", targetBranch);
-            map.put("sameBranchNameExpected", sameBranchNameExpected);
-            map.put("enabled", enabled);
-            map.put("allowForcePush", allowForcePush);
-            map.put("manualOnly", manualOnly);
-            map.put("reviewRequired", reviewRequired);
-            map.put("schedule", schedule.toMap());
-            return map;
-        }
-
-        Path localRepoPath() {
-            return Path.of(localWorkspaceRoot).resolve(localProjectName);
-        }
-
-        String displayLocalRepoPath() {
-            return localRepoPath().toString();
         }
     }
 
@@ -178,14 +290,14 @@ final class Models {
     }
 
     static final class RuntimeState {
-        Map<String, MappingRuntimeState> mappingStates = new LinkedHashMap<>();
+        Map<String, RuleRuntimeState> mappingStates = new LinkedHashMap<>();
 
         static RuntimeState fromMap(Map<String, Object> map) {
             RuntimeState state = new RuntimeState();
             Object rawStates = map.getOrDefault("mappingStates", Map.of());
             if (rawStates instanceof Map<?, ?> stateMap) {
                 for (Map.Entry<String, Object> entry : Json.asObject(stateMap).entrySet()) {
-                    state.mappingStates.put(entry.getKey(), MappingRuntimeState.fromMap(Json.asObject(entry.getValue())));
+                    state.mappingStates.put(entry.getKey(), RuleRuntimeState.fromMap(Json.asObject(entry.getValue())));
                 }
             }
             return state;
@@ -194,7 +306,7 @@ final class Models {
         Map<String, Object> toMap() {
             Map<String, Object> root = new LinkedHashMap<>();
             Map<String, Object> states = new LinkedHashMap<>();
-            for (Map.Entry<String, MappingRuntimeState> entry : mappingStates.entrySet()) {
+            for (Map.Entry<String, RuleRuntimeState> entry : mappingStates.entrySet()) {
                 states.put(entry.getKey(), entry.getValue().toMap());
             }
             root.put("mappingStates", states);
@@ -202,7 +314,7 @@ final class Models {
         }
     }
 
-    static final class MappingRuntimeState {
+    static final class RuleRuntimeState {
         String lastRunAt;
         String lastStatus = "never";
         String lastRunSource;
@@ -211,8 +323,8 @@ final class Models {
         String lastLogPath;
         String lastMessage;
 
-        static MappingRuntimeState fromMap(Map<String, Object> map) {
-            MappingRuntimeState state = new MappingRuntimeState();
+        static RuleRuntimeState fromMap(Map<String, Object> map) {
+            RuleRuntimeState state = new RuleRuntimeState();
             state.lastRunAt = nullableString(map.get("lastRunAt"));
             state.lastStatus = stringValue(map.getOrDefault("lastStatus", "never"));
             state.lastRunSource = nullableString(map.get("lastRunSource"));
@@ -233,6 +345,16 @@ final class Models {
             map.put("lastLogPath", lastLogPath);
             map.put("lastMessage", lastMessage);
             return map;
+        }
+    }
+
+    static final class RuleSelection {
+        final ProjectConfig project;
+        final RuleConfig rule;
+
+        RuleSelection(ProjectConfig project, RuleConfig rule) {
+            this.project = project;
+            this.rule = rule;
         }
     }
 
@@ -322,6 +444,13 @@ final class Models {
         return value.endsWith(".git") ? value.substring(0, value.length() - 4) : value;
     }
 
+    static String slugify(String value) {
+        String normalized = String.valueOf(firstNonBlank(value, "project")).trim().toLowerCase();
+        normalized = normalized.replaceAll("[^a-z0-9]+", "-");
+        normalized = normalized.replaceAll("(^-+|-+$)", "");
+        return normalized.isBlank() ? "project" : normalized;
+    }
+
     static void require(boolean condition, String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
@@ -335,10 +464,21 @@ final class Models {
             .orElseThrow(() -> new IllegalArgumentException("Remote not found: " + remoteId));
     }
 
-    static MappingConfig findMapping(AppConfig config, String mappingId) {
-        return config.mappings.stream()
-            .filter(mapping -> Objects.equals(mapping.id, mappingId))
+    static ProjectConfig findProject(AppConfig config, String projectId) {
+        return config.projects.stream()
+            .filter(project -> Objects.equals(project.id, projectId))
             .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("Mapping not found: " + mappingId));
+            .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+    }
+
+    static RuleSelection findRuleSelection(AppConfig config, String ruleId) {
+        for (ProjectConfig project : config.projects) {
+            for (RuleConfig rule : project.rules) {
+                if (Objects.equals(rule.id, ruleId)) {
+                    return new RuleSelection(project, rule);
+                }
+            }
+        }
+        throw new IllegalArgumentException("Rule not found: " + ruleId);
     }
 }
