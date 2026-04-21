@@ -30,6 +30,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private final RuntimeStateService runtimeStateService;
     private final GitService gitService;
     private final LogService logService;
+    private final DiffCacheService diffCacheService;
     private final SchedulerService schedulerService;
     private final Path staticDir;
     private final Map<String, ReentrantLock> repoLocks = new ConcurrentHashMap<>();
@@ -37,11 +38,12 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private HttpServer server;
 
     AppServer(ConfigService configService, RuntimeStateService runtimeStateService, GitService gitService, LogService logService,
-              Path staticDir) {
+              DiffCacheService diffCacheService, Path staticDir) {
         this.configService = configService;
         this.runtimeStateService = runtimeStateService;
         this.gitService = gitService;
         this.logService = logService;
+        this.diffCacheService = diffCacheService;
         this.staticDir = staticDir;
         this.schedulerService = new SchedulerService(configService, runtimeStateService, this);
     }
@@ -99,6 +101,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                 String localWorkspaceRoot = Models.nullableString(body.get("localWorkspaceRoot"));
                 configService.updateGlobalWorkspaceRoot(localWorkspaceRoot);
+                diffCacheService.markAllStale("Global workspace root updated");
                 schedulerService.refreshScheduleState();
                 HttpUtil.sendJson(exchange, 200, Map.of(
                     "localWorkspaceRoot", localWorkspaceRoot == null ? "" : localWorkspaceRoot
@@ -131,6 +134,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             if ("POST".equals(exchange.getRequestMethod()) && "/api/remotes".equals(path)) {
                 RemoteConfig remote = RemoteConfig.fromMap(HttpUtil.readJsonObject(exchange));
                 configService.upsertRemote(remote);
+                diffCacheService.markAllStale("Remote tab updated");
                 HttpUtil.sendJson(exchange, 200, remote.toMap());
                 return;
             }
@@ -140,12 +144,14 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 body.put("id", id);
                 RemoteConfig remote = RemoteConfig.fromMap(body);
                 configService.upsertRemote(remote);
+                diffCacheService.markAllStale("Remote tab updated");
                 HttpUtil.sendJson(exchange, 200, remote.toMap());
                 return;
             }
             if ("DELETE".equals(exchange.getRequestMethod()) && path.startsWith("/api/remotes/")) {
                 String id = path.substring("/api/remotes/".length());
                 configService.deleteRemote(id);
+                diffCacheService.markAllStale("Remote tab deleted");
                 HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", id));
                 return;
             }
@@ -165,6 +171,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             if ("POST".equals(exchange.getRequestMethod()) && "/api/projects".equals(path)) {
                 ProjectConfig project = ProjectConfig.fromMap(HttpUtil.readJsonObject(exchange));
                 configService.upsertProject(project);
+                diffCacheService.markAllStale("Project updated");
                 schedulerService.refreshScheduleState();
                 HttpUtil.sendJson(exchange, 200, project.toMap());
                 return;
@@ -178,6 +185,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     body.put("id", projectId);
                     ProjectConfig project = ProjectConfig.fromMap(body);
                     configService.upsertProject(project);
+                    diffCacheService.markAllStale("Project updated");
                     schedulerService.refreshScheduleState();
                     HttpUtil.sendJson(exchange, 200, project.toMap());
                     return;
@@ -187,6 +195,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     ProjectConfig project = Models.findProject(config, projectId);
                     for (RuleConfig rule : project.rules) {
                         runtimeStateService.delete(rule.id);
+                        diffCacheService.deleteRule(rule.id);
                     }
                     configService.deleteProject(projectId);
                     schedulerService.refreshScheduleState();
@@ -200,6 +209,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                         body.put("id", ruleId);
                         RuleConfig rule = RuleConfig.fromMap(body);
                         configService.upsertRule(projectId, rule);
+                        diffCacheService.markStale(rule.id, "Rule updated");
                         schedulerService.refreshScheduleState();
                         HttpUtil.sendJson(exchange, 200, rule.toMap());
                         return;
@@ -207,6 +217,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     if ("DELETE".equals(exchange.getRequestMethod())) {
                         configService.deleteRule(projectId, ruleId);
                         runtimeStateService.delete(ruleId);
+                        diffCacheService.deleteRule(ruleId);
                         schedulerService.refreshScheduleState();
                         HttpUtil.sendJson(exchange, 200, Map.of("deleted", true, "id", ruleId));
                         return;
@@ -228,6 +239,16 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
                 if ("validate".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
                     HttpUtil.sendJson(exchange, 200, gitService.validate(configService.getConfig(), selection.project, selection.rule));
+                    return;
+                }
+                if ("diff-cache".equals(parts[4]) && "GET".equals(exchange.getRequestMethod())) {
+                    Map<String, Object> summary = diffCacheService.readSummary(ruleId);
+                    if (summary == null) {
+                        HttpUtil.sendJson(exchange, 404,
+                            HttpUtil.error("DIFF_CACHE_NOT_FOUND", "Diff cache does not exist", Map.of("ruleId", ruleId)));
+                        return;
+                    }
+                    HttpUtil.sendJson(exchange, 200, summary);
                     return;
                 }
                 if ("diff".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
@@ -252,8 +273,38 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 if ("schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
                     selection.rule.schedule = Models.ScheduleConfig.fromMap(HttpUtil.readJsonObject(exchange));
                     configService.upsertRule(selection.project.id, selection.rule);
+                    diffCacheService.markStale(ruleId, "Rule schedule updated");
                     schedulerService.refreshScheduleState();
                     HttpUtil.sendJson(exchange, 200, selection.rule.toMap());
+                    return;
+                }
+            }
+            if (parts.length == 6 && "api".equals(parts[1]) && "rules".equals(parts[2]) && "diff-cache".equals(parts[4])) {
+                String ruleId = parts[3];
+                RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
+                if ("refresh".equals(parts[5]) && "POST".equals(exchange.getRequestMethod())) {
+                    HttpUtil.sendJson(exchange, 200, refreshDiffCache(selection));
+                    return;
+                }
+                if ("file".equals(parts[5]) && "POST".equals(exchange.getRequestMethod())) {
+                    Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                    String filePath = Models.stringValue(body.get("path"));
+                    String oldPath = Models.nullableString(body.get("oldPath"));
+                    String cachedPatch = diffCacheService.readPatch(ruleId, filePath, oldPath);
+                    boolean cacheHit = cachedPatch != null;
+                    if (!cacheHit) {
+                        Map<String, Object> patchPayload =
+                            gitService.diffFile(configService.getConfig(), selection.project, selection.rule, filePath, oldPath);
+                        cachedPatch = Models.nullableString(patchPayload.get("patch"));
+                        diffCacheService.writePatch(ruleId, filePath, oldPath, cachedPatch);
+                    }
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("ruleId", ruleId);
+                    payload.put("path", filePath);
+                    payload.put("oldPath", oldPath);
+                    payload.put("cacheHit", cacheHit);
+                    payload.put("patch", cachedPatch == null ? "" : cachedPatch);
+                    HttpUtil.sendJson(exchange, 200, payload);
                     return;
                 }
             }
@@ -379,6 +430,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     : java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8))
                         .plusMinutes(rule.schedule.intervalMinutes).toString();
                 runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, "Sync completed");
+                diffCacheService.markStale(rule.id, "Sync completed");
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
                 payload.put("projectId", project.id);
@@ -423,5 +475,15 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         });
         Models.require(selected[0] != null && !selected[0].isBlank(), "No directory selected");
         return selected[0];
+    }
+
+    private Map<String, Object> refreshDiffCache(RuleSelection selection) throws Exception {
+        try {
+            Map<String, Object> summary = gitService.diff(configService.getConfig(), selection.project, selection.rule);
+            return diffCacheService.writeSummary(selection.rule.id, summary, "Manual refresh completed");
+        } catch (Exception exception) {
+            diffCacheService.markFailed(selection.rule.id, exception.getMessage());
+            throw exception;
+        }
     }
 }

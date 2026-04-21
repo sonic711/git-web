@@ -70,12 +70,14 @@
 - API 契約：[docs/08-api-contract.md](/Users/sonic711/Desktop/development/git-web/docs/08-api-contract.md)
 - Java 模組設計：[docs/09-java-module-design.md](/Users/sonic711/Desktop/development/git-web/docs/09-java-module-design.md)
 - UI 規格：[docs/10-ui-spec.md](/Users/sonic711/Desktop/development/git-web/docs/10-ui-spec.md)
+- Phase 2 差異快取：[docs/11-phase-2-diff-cache.md](/Users/sonic711/Desktop/development/git-web/docs/11-phase-2-diff-cache.md)
 
 ## 目前設定檔策略
 
 - 主設定檔：`config/settings.json`
 - 本機執行狀態檔：`state/runtime-state.json`
 - 執行紀錄：`logs/*.log`
+- 差異快取：`cache/diff/*`
 
 主設定檔保存：
 
@@ -157,3 +159,5 @@
 - `LogService` 已改成只保留一天內的 log，啟動與寫入新 log 時都會清理過期檔案。
 - `查看差異` 已改成開啟獨立 review 視窗，後端 diff API 會回傳每個檔案的 patch，並可在新視窗完成人工確認後回送主畫面。
 - 差異頁已改為懶載入單檔 patch：初次只抓檔案清單，點擊檔案時才呼叫單檔 diff API，避免 timeout。
+- 已新增 Phase 2 差異快取規格，定義摘要快取、單檔 patch 快取、API、TTL、失效與 UI 流程。
+- Phase 2 已開始實作差異快取 MVP：新增 `DiffCacheService`、cache-first 差異頁、手動刷新摘要與單檔 patch 快取。

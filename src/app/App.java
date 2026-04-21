@@ -13,7 +13,9 @@ public final class App {
         GitCommandRunner gitCommandRunner = new GitCommandRunner();
         GitService gitService = new GitService(gitCommandRunner);
         LogService logService = new LogService(root.resolve("logs"));
-        AppServer appServer = new AppServer(configService, runtimeStateService, gitService, logService, root.resolve("static"));
+        DiffCacheService diffCacheService = new DiffCacheService(root.resolve("cache/diff"));
+        AppServer appServer = new AppServer(configService, runtimeStateService, gitService, logService, diffCacheService,
+            root.resolve("static"));
         appServer.start(8080);
         System.out.println("Server started at http://127.0.0.1:8080");
     }

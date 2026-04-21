@@ -14,7 +14,9 @@ async function api(path, options = {}) {
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Request failed');
+    const error = new Error(data.error?.message || 'Request failed');
+    error.code = data.error?.code;
+    throw error;
   }
   return data;
 }
@@ -77,21 +79,47 @@ function formatDateTime(value) {
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
-async function loadDiff() {
+async function loadCachedSummary() {
   try {
-    const diff = await withLoading('載入差異中...', () =>
-      api(`/api/rules/${diffState.ruleId}/diff`, { method: 'POST' })
+    const diff = await withLoading('載入差異快取中...', () =>
+      api(`/api/rules/${diffState.ruleId}/diff-cache`)
     );
-    diffState.diff = diff;
-    diffState.confirmed = false;
+    applySummary(diff);
+    showToast('已載入差異快取', 'success');
+  } catch (error) {
+    diffState.diff = null;
     diffState.selectedFileIndex = -1;
     diffState.patchCache = {};
     render();
-    showToast('差異已載入', 'success');
-  } catch (error) {
+    if (error.code === 'DIFF_CACHE_NOT_FOUND') {
+      document.getElementById('diffPageSubtitle').textContent = '尚未建立差異快取，請按「抓取最新差異」';
+      document.getElementById('diffPatchView').textContent = '尚未建立差異快取，請按右上角「抓取最新差異」。';
+      showToast('尚未建立差異快取', 'error');
+      return;
+    }
     showToast(error.message, 'error');
     document.getElementById('diffPatchView').textContent = error.message;
   }
+}
+
+async function refreshDiffSummary() {
+  try {
+    const diff = await withLoading('抓取最新差異中...', () =>
+      api(`/api/rules/${diffState.ruleId}/diff-cache/refresh`, { method: 'POST' })
+    );
+    applySummary(diff);
+    showToast('最新差異已更新', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+function applySummary(diff) {
+  diffState.diff = diff;
+  diffState.confirmed = false;
+  diffState.selectedFileIndex = -1;
+  diffState.patchCache = {};
+  render();
 }
 
 function render() {
@@ -104,6 +132,8 @@ function render() {
 function renderMeta() {
   const diff = diffState.diff;
   if (!diff) {
+    document.getElementById('diffPageSubtitle').textContent = '尚未載入差異快取';
+    document.getElementById('diffMeta').innerHTML = '';
     return;
   }
   document.getElementById('diffPageSubtitle').textContent =
@@ -120,14 +150,21 @@ function renderMeta() {
     <div class="diff-meta-item"><strong>Repo</strong><span>${escapeHtml(diff.targetRepoName || '-')}</span></div>
     <div class="diff-meta-item"><strong>Commits Ahead</strong><span>${escapeHtml(diff.summary?.aheadCommits ?? 0)}</span></div>
     <div class="diff-meta-item"><strong>Changed Files</strong><span>${escapeHtml(diff.summary?.changedFiles ?? 0)}</span></div>
+    <div class="diff-meta-item"><strong>Cache Status</strong><span>${escapeHtml(diff.cacheStatus || '-')}</span></div>
+    <div class="diff-meta-item"><strong>Cached At</strong><span>${escapeHtml(formatDateTime(diff.cachedAt))}</span></div>
     <div class="diff-meta-item diff-meta-wide"><strong>Target URL</strong><span>${escapeHtml(diff.targetRemoteUrl || '-')}</span></div>
+    <div class="diff-meta-item diff-meta-wide"><strong>Cache Message</strong><span>${escapeHtml(diff.lastRefreshMessage || '-')}</span></div>
     <div class="diff-meta-item diff-meta-wide"><strong>Commits</strong><ul class="diff-commit-list">${commitItems || '<li>(none)</li>'}</ul></div>
   `;
 }
 
 function renderFileList() {
   const root = document.getElementById('diffFileList');
-  const files = diffState.diff?.files || [];
+  if (!diffState.diff) {
+    root.innerHTML = '<div class="viewer empty">尚未載入差異快取</div>';
+    return;
+  }
+  const files = diffState.diff.files || [];
   if (!files.length) {
     root.innerHTML = '<div class="viewer empty">沒有檔案差異</div>';
     return;
@@ -143,13 +180,13 @@ function renderFileList() {
 }
 
 function renderPatch() {
-  const files = diffState.diff?.files || [];
-  const selected = diffState.selectedFileIndex >= 0 ? files[diffState.selectedFileIndex] : null;
   const title = document.getElementById('diffFileTitle');
   const root = document.getElementById('diffPatchView');
+  const files = diffState.diff?.files || [];
+  const selected = diffState.selectedFileIndex >= 0 ? files[diffState.selectedFileIndex] : null;
   if (!selected) {
     title.textContent = '請從左側選擇檔案';
-    root.textContent = '尚未載入檔案差異';
+    root.textContent = diffState.diff ? '尚未載入檔案差異' : '尚未載入差異快取';
     return;
   }
   title.textContent = selected.displayPath || selected.path;
@@ -212,7 +249,7 @@ async function selectDiffFile(index) {
   }
   try {
     const data = await withLoading('載入檔案差異中...', () =>
-      api(`/api/rules/${diffState.ruleId}/diff-file`, {
+      api(`/api/rules/${diffState.ruleId}/diff-cache/file`, {
         method: 'POST',
         body: JSON.stringify({
           path: file.path,
@@ -244,7 +281,7 @@ function confirmReview() {
   showToast('已完成人工確認，主畫面可直接同步', 'success');
 }
 
-document.getElementById('reloadDiffButton').addEventListener('click', loadDiff);
+document.getElementById('reloadDiffButton').addEventListener('click', refreshDiffSummary);
 document.getElementById('confirmReviewButton').addEventListener('click', confirmReview);
 
 const params = new URLSearchParams(window.location.search);
@@ -253,7 +290,7 @@ if (!diffState.ruleId) {
   document.getElementById('diffPatchView').textContent = '缺少 ruleId';
   showToast('缺少 ruleId', 'error');
 } else {
-  loadDiff();
+  loadCachedSummary();
 }
 
 window.selectDiffFile = selectDiffFile;

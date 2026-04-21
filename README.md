@@ -26,6 +26,7 @@
 - [docs/08-api-contract.md](/Users/sonic711/Desktop/development/git-web/docs/08-api-contract.md)
 - [docs/09-java-module-design.md](/Users/sonic711/Desktop/development/git-web/docs/09-java-module-design.md)
 - [docs/10-ui-spec.md](/Users/sonic711/Desktop/development/git-web/docs/10-ui-spec.md)
+- [docs/11-phase-2-diff-cache.md](/Users/sonic711/Desktop/development/git-web/docs/11-phase-2-diff-cache.md)
 
 ## 已確認架構
 
@@ -35,6 +36,7 @@
 - 設定儲存：本機可攜式 `JSON` 設定檔
 - 執行狀態：本機 `state` 檔
 - 紀錄儲存：本機 `log` 檔
+- 差異快取：本機 `cache` 檔
 - 資料庫：不使用
 
 ## 設計原則

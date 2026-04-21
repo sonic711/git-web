@@ -1,5 +1,6 @@
 out/
 logs/
 state/
+cache/
 config/settings.json
 .DS_Store
