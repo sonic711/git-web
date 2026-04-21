@@ -21,6 +21,7 @@ final class Models {
     static final class AppConfig {
         int version = 1;
         String updatedAt = nowIso();
+        String localWorkspaceRoot;
         List<RemoteConfig> remotes = new ArrayList<>();
         List<ProjectConfig> projects = new ArrayList<>();
 
@@ -28,6 +29,7 @@ final class Models {
             AppConfig config = new AppConfig();
             config.version = intValue(map.getOrDefault("version", 1));
             config.updatedAt = stringValue(map.getOrDefault("updatedAt", nowIso()));
+            config.localWorkspaceRoot = nullableString(map.get("localWorkspaceRoot"));
             for (Object item : Json.asList(map.getOrDefault("remotes", List.of()))) {
                 config.remotes.add(RemoteConfig.fromMap(Json.asObject(item)));
             }
@@ -44,6 +46,7 @@ final class Models {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("version", version);
             map.put("updatedAt", updatedAt);
+            map.put("localWorkspaceRoot", localWorkspaceRoot);
             List<Object> remoteList = new ArrayList<>();
             for (RemoteConfig remote : remotes) {
                 remoteList.add(remote.toMap());
@@ -133,7 +136,6 @@ final class Models {
             map.put("id", id);
             map.put("name", name);
             map.put("vendorRepoUrl", vendorRepoUrl);
-            map.put("localWorkspaceRoot", localWorkspaceRoot);
             map.put("localProjectName", localProjectName);
             map.put("enabled", enabled);
             List<Object> ruleList = new ArrayList<>();
@@ -144,12 +146,16 @@ final class Models {
             return map;
         }
 
-        Path localRepoPath() {
-            return Path.of(localWorkspaceRoot).resolve(localProjectName);
+        Path localRepoPath(AppConfig appConfig) {
+            return Path.of(effectiveWorkspaceRoot(appConfig)).resolve(localProjectName);
         }
 
-        String displayLocalRepoPath() {
-            return localRepoPath().toString();
+        String displayLocalRepoPath(AppConfig appConfig) {
+            return localRepoPath(appConfig).toString();
+        }
+
+        String effectiveWorkspaceRoot(AppConfig appConfig) {
+            return firstNonBlank(appConfig.localWorkspaceRoot, localWorkspaceRoot);
         }
     }
 

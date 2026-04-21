@@ -5,7 +5,7 @@
 目前已確認的核心能力：
 
 1. 使用者先建立一個專案，再在專案底下建立多條同步規則。
-2. 專案保存廠商 repo 的 `HTTPS` URL、本地主目錄與本地專案資料夾名稱。
+2. 系統保存一份全局本地主目錄，專案只保存廠商 repo 的 `HTTPS` URL 與本地專案資料夾名稱。
 3. 規則保存來源 branch、目標 remote、目標 branch、排程與 force push 選項。
 4. 同一個專案可同時有 `sit -> sit`、`sit2 -> sit2`、`uat -> uat` 等多條規則。
 5. 自動同步規則仍可手動同步，不需為了 `-f` 額外建立新規則。
@@ -73,3 +73,4 @@ Windows PowerShell:
 - 需安裝 `JDK 17`
 - 需安裝 `git`
 - 第一次可參考 `config/settings.example.json` 建立本機的 `config/settings.json`
+- 本地主目錄改為全局設定，所有專案共用同一個 workspace root

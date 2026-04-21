@@ -82,6 +82,12 @@ final class ConfigService {
         replaceConfig(config);
     }
 
+    synchronized void updateGlobalWorkspaceRoot(String localWorkspaceRoot) throws IOException {
+        AppConfig config = current;
+        config.localWorkspaceRoot = localWorkspaceRoot;
+        replaceConfig(config);
+    }
+
     synchronized void deleteProject(String projectId) throws IOException {
         AppConfig config = current;
         config.projects.removeIf(project -> project.id.equals(projectId));
@@ -134,6 +140,7 @@ final class ConfigService {
     }
 
     private void normalizeLegacyConfig(AppConfig config) {
+        String discoveredWorkspaceRoot = config.localWorkspaceRoot;
         for (RemoteConfig remote : config.remotes) {
             if (remote.name == null || remote.name.isBlank()) {
                 remote.name = remote.id;
@@ -152,6 +159,10 @@ final class ConfigService {
                 project.localWorkspaceRoot = parent != null ? parent.toString() : legacyPath.toString();
                 project.localProjectName = legacyPath.getFileName() != null ? legacyPath.getFileName().toString() : project.localProjectName;
             }
+            if ((discoveredWorkspaceRoot == null || discoveredWorkspaceRoot.isBlank())
+                && project.localWorkspaceRoot != null && !project.localWorkspaceRoot.isBlank()) {
+                discoveredWorkspaceRoot = project.localWorkspaceRoot;
+            }
             if (project.localProjectName == null || project.localProjectName.isBlank()) {
                 project.localProjectName = Models.stripGitSuffix(Models.extractRepoName(project.vendorRepoUrl));
             }
@@ -167,7 +178,6 @@ final class ConfigService {
                 item.id = project.id;
                 item.name = project.name;
                 item.vendorRepoUrl = project.vendorRepoUrl;
-                item.localWorkspaceRoot = project.localWorkspaceRoot;
                 item.localProjectName = project.localProjectName;
                 item.enabled = project.enabled;
                 return item;
@@ -192,6 +202,7 @@ final class ConfigService {
                 }
             }
         }
+        config.localWorkspaceRoot = discoveredWorkspaceRoot;
         config.projects = new java.util.ArrayList<>(merged.values());
     }
 
@@ -209,6 +220,10 @@ final class ConfigService {
 
         Set<String> projectIds = new HashSet<>();
         Set<String> ruleIds = new HashSet<>();
+        if (!config.projects.isEmpty()) {
+            Models.require(config.localWorkspaceRoot != null && !config.localWorkspaceRoot.isBlank(),
+                "localWorkspaceRoot is required");
+        }
         for (ProjectConfig project : config.projects) {
             Models.require(project.id != null && !project.id.isBlank(), "project id is required");
             Models.require(projectIds.add(project.id), "duplicate project id: " + project.id);
@@ -216,8 +231,6 @@ final class ConfigService {
             Models.require(project.vendorRepoUrl != null && !project.vendorRepoUrl.isBlank(), "vendorRepoUrl is required");
             Models.require(project.vendorRepoUrl.startsWith("https://") || project.vendorRepoUrl.startsWith("http://"),
                 "vendorRepoUrl must be HTTP/HTTPS");
-            Models.require(project.localWorkspaceRoot != null && !project.localWorkspaceRoot.isBlank(),
-                "localWorkspaceRoot is required");
             Models.require(project.localProjectName != null && !project.localProjectName.isBlank(),
                 "localProjectName is required");
             for (RuleConfig rule : project.rules) {
@@ -238,7 +251,7 @@ final class ConfigService {
     }
 
     private String projectKey(ProjectConfig project) {
-        return project.vendorRepoUrl + "|" + project.localWorkspaceRoot + "|" + project.localProjectName;
+        return project.vendorRepoUrl + "|" + project.localProjectName;
     }
 
     synchronized Map<String, Object> configAsMap() {

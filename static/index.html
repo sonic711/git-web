@@ -27,8 +27,28 @@
     <section class="panel">
       <div class="panel-head">
         <div>
+          <h2>Settings</h2>
+          <p class="panel-copy">本地主目錄改為全局設定，所有專案都會共用這個主目錄。</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>全局本地主目錄
+          <div class="picker-row">
+            <input id="globalWorkspaceRoot" required>
+            <button type="button" class="secondary" id="pickGlobalWorkspaceRootButton">選資料夾</button>
+          </div>
+        </label>
+        <div class="inline-actions">
+          <button id="saveSystemSettingsButton">儲存全局設定</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
           <h2>Projects</h2>
-          <p class="panel-copy">每個專案共用同一份 vendor repo 與本地路徑，底下可以建立多條 branch 同步規則。</p>
+          <p class="panel-copy">每個專案共用同一份 vendor repo 與全局本地主目錄，底下可以建立多條 branch 同步規則。</p>
         </div>
         <button id="newProjectButton">新增專案</button>
       </div>
@@ -73,12 +93,6 @@
         <input type="hidden" id="projectId">
         <label>專案名稱<input id="projectName" required></label>
         <label>廠商 Repo URL<input id="vendorRepoUrl" required></label>
-        <label>本地主目錄
-          <div class="picker-row">
-            <input id="localWorkspaceRoot" required>
-            <button type="button" class="secondary" id="pickDirectoryButton">選資料夾</button>
-          </div>
-        </label>
         <label>本地專案資料夾名稱<input id="localProjectName" placeholder="project-name" required></label>
         <label class="checkbox"><input type="checkbox" id="projectEnabled" checked>啟用專案</label>
         <div class="preview-box">

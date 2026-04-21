@@ -1,6 +1,7 @@
 const state = {
   projects: [],
   remotes: [],
+  systemConfig: { localWorkspaceRoot: '' },
   selectedRemoteTab: 'all',
   selectedDiffRuleId: null,
   diffConfirmed: false,
@@ -89,10 +90,15 @@ function closeModal(id) {
 }
 
 function render() {
+  renderSystemSettings();
   renderProjects();
   renderRemoteTabs();
   renderRemotes();
   renderRemoteOptions();
+}
+
+function renderSystemSettings() {
+  document.getElementById('globalWorkspaceRoot').value = state.systemConfig.localWorkspaceRoot || '';
 }
 
 function renderProjects() {
@@ -181,10 +187,11 @@ function renderRuleRow(project, rule) {
       </td>
       <td>
         <span class="tag ${statusClass}">${escapeHtml(rule.lastStatus || 'never')}</span>
+        <div class="status-copy">${escapeHtml(formatDateTime(rule.lastRunAt))}</div>
         <div class="status-copy">${escapeHtml(rule.lastRunSource || '-')}</div>
         <div class="status-copy">${escapeHtml(rule.lastMessage || '')}</div>
       </td>
-      <td>${escapeHtml(rule.nextRunAt || '-')}</td>
+      <td>${escapeHtml(formatDateTime(rule.nextRunAt))}</td>
       <td>
         <div class="row-controls">
           <label class="mini-check">
@@ -273,7 +280,7 @@ function renderRemoteOptions() {
 }
 
 function updateLocalRepoPathPreview() {
-  const workspaceRoot = document.getElementById('localWorkspaceRoot').value.trim();
+  const workspaceRoot = document.getElementById('globalWorkspaceRoot').value.trim();
   const projectName = document.getElementById('localProjectName').value.trim();
   const preview = document.getElementById('localRepoPathPreview');
   if (!workspaceRoot || !projectName) {
@@ -305,6 +312,23 @@ function updateRemoteExamplePreview() {
   }
   const separator = baseUrl.endsWith('/') || baseUrl.endsWith(':') ? '' : '/';
   preview.textContent = `${baseUrl}${separator}project.git`;
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 function deriveProjectNameFromUrl(repoUrl) {
@@ -361,7 +385,6 @@ function editProject(projectId) {
   document.getElementById('projectId').value = project.id;
   document.getElementById('projectName').value = project.name;
   document.getElementById('vendorRepoUrl').value = project.vendorRepoUrl;
-  document.getElementById('localWorkspaceRoot').value = project.localWorkspaceRoot;
   document.getElementById('localProjectName').value = project.localProjectName;
   document.getElementById('projectEnabled').checked = !!project.enabled;
   updateLocalRepoPathPreview();
@@ -436,10 +459,12 @@ function newRemote() {
 async function loadAll(options = {}) {
   const silent = !!options.silent;
   const run = async () => {
-    const [projects, remotes] = await Promise.all([
+    const [systemConfig, projects, remotes] = await Promise.all([
+      api('/api/system/config'),
       api('/api/projects'),
       api('/api/remotes'),
     ]);
+    state.systemConfig = systemConfig;
     state.projects = projects;
     state.remotes = remotes;
     if (state.selectedRemoteTab !== 'all' && !state.remotes.some(remote => remote.id === state.selectedRemoteTab)) {
@@ -450,13 +475,29 @@ async function loadAll(options = {}) {
   return silent ? run() : withLoading('重新載入資料中...', run);
 }
 
-async function pickDirectory() {
+async function pickGlobalWorkspaceRoot() {
   try {
     const result = await withLoading('開啟資料夾選擇器...', () =>
       api('/api/system/select-directory', { method: 'POST', body: '{}' })
     );
-    document.getElementById('localWorkspaceRoot').value = result.path || '';
+    document.getElementById('globalWorkspaceRoot').value = result.path || '';
     updateLocalRepoPathPreview();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function saveSystemSettings() {
+  try {
+    const payload = {
+      localWorkspaceRoot: document.getElementById('globalWorkspaceRoot').value.trim(),
+    };
+    await withLoading('儲存全局設定中...', () =>
+      api('/api/system/config', { method: 'PUT', body: JSON.stringify(payload) })
+    );
+    await loadAll({ silent: true });
+    updateLocalRepoPathPreview();
+    showToast('全局設定已儲存', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -471,7 +512,6 @@ async function saveProject(event) {
       id,
       name: document.getElementById('projectName').value,
       vendorRepoUrl: document.getElementById('vendorRepoUrl').value,
-      localWorkspaceRoot: document.getElementById('localWorkspaceRoot').value,
       localProjectName: document.getElementById('localProjectName').value,
       enabled: document.getElementById('projectEnabled').checked,
       rules: existing?.rules?.map(stripRuntimeFieldsFromRule) || [],
@@ -768,12 +808,13 @@ function escapeAttr(value) {
 document.getElementById('projectForm').addEventListener('submit', saveProject);
 document.getElementById('ruleForm').addEventListener('submit', saveRule);
 document.getElementById('remoteForm').addEventListener('submit', saveRemote);
+document.getElementById('saveSystemSettingsButton').addEventListener('click', saveSystemSettings);
 document.getElementById('newProjectButton').addEventListener('click', newProject);
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());
-document.getElementById('pickDirectoryButton').addEventListener('click', pickDirectory);
+document.getElementById('pickGlobalWorkspaceRootButton').addEventListener('click', pickGlobalWorkspaceRoot);
 document.getElementById('vendorRepoUrl').addEventListener('input', syncProjectFormRules);
-document.getElementById('localWorkspaceRoot').addEventListener('input', updateLocalRepoPathPreview);
+document.getElementById('globalWorkspaceRoot').addEventListener('input', updateLocalRepoPathPreview);
 document.getElementById('localProjectName').addEventListener('input', updateLocalRepoPathPreview);
 document.getElementById('sameBranchNameExpected').addEventListener('change', syncRuleFormRules);
 document.getElementById('sourceBranch').addEventListener('input', syncRuleFormRules);

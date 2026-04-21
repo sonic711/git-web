@@ -42,7 +42,7 @@
 - Remote 已重構為「頁籤模板」模型，每個頁籤保存 `baseUrl`，Mapping 只填最後的 `project.git`。
 - 新增與編輯 Mapping / Remote 必須使用 popup modal，不佔主畫面中央區域。
 - 需支援 Windows 啟動腳本，至少提供 `run.bat` 與 `run.ps1`。
-- Mapping 的本地路徑模型已改成 `localWorkspaceRoot + localProjectName`，不再直接輸入單一 repo 路徑。
+- 本地工作目錄已改成全局 `localWorkspaceRoot` + 各專案 `localProjectName`，不再由專案各自保存主目錄。
 - 同一本地專案可對應多筆 mapping，且每筆 mapping 使用獨立內部 remote 名稱。
 - 同步前需先將本地 `sourceBranch` 強制對齊廠商 `origin/<sourceBranch>`，再執行 `git pull --ff-only`。
 - 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
@@ -51,6 +51,9 @@
 - 若某條 rule 從未手動同步過，首次啟用自動同步後也必須立即進入排程，不可等到第一次人工執行後才開始。
 - 專案列表需支援將同一專案底下的多條規則摺疊 / 展開，避免主畫面過長。
 - 自動同步需允許不同本地 repo 的專案並行執行；只有限制同一本地 repo 的規則需排隊。
+- UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
+- UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
+- log 檔只保留一天，超過一天的 `.log` 需自動清理。
 
 ## 檔案結構決策
 
@@ -147,3 +150,6 @@
 - repo 改為只追蹤 `config/settings.example.json`，本機 `config/settings.json` 已從 git index 移除。
 - 修正首次啟用自動同步但尚未手動同步過的 rule 不會執行的問題；scheduler 現在會將第一次 `nextRunAt` 設為當下時間。
 - 修正自動同步在不同專案間仍被串行化的問題；排程器現在只負責觸發，實際同步交由背景 worker 執行，不同 repo 可並行。
+- 將本地主目錄從專案層級改成全局設定，專案只保留 `localProjectName`，並保留舊設定檔的相容轉換。
+- 前端時間顯示改為 `YYYY-MM-DD HH:mm:ss`，最後結果欄位已補上最後執行時間。
+- `LogService` 已改成只保留一天內的 log，啟動與寫入新 log 時都會清理過期檔案。

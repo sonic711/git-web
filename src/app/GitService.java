@@ -24,16 +24,17 @@ final class GitService {
         List<Object> checks = new ArrayList<>();
         boolean ok = true;
         RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+        Path repoPath = project.localRepoPath(config);
 
         ok &= addCheck(checks, "project_enabled", project.enabled);
         ok &= addCheck(checks, "rule_enabled", rule.enabled);
-        boolean repoExists = Files.exists(project.localRepoPath());
+        boolean repoExists = Files.exists(repoPath);
         ok &= addCheck(checks, "repo_path_exists", repoExists);
-        boolean repoReady = repoExists && isGitRepo(project.localRepoPath());
+        boolean repoReady = repoExists && isGitRepo(repoPath);
         ok &= addCheck(checks, "repo_ready", repoReady || !repoExists);
         if (repoReady) {
-            fetchOrigin(project.localRepoPath());
-            ok &= addCheck(checks, "vendor_branch_exists", branchExists(project.localRepoPath(), originRef(rule)));
+            fetchOrigin(repoPath);
+            ok &= addCheck(checks, "vendor_branch_exists", branchExists(repoPath, originRef(rule)));
         }
         ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && remote.baseUrl != null && !remote.baseUrl.isBlank());
         ok &= addCheck(checks, "target_repo_name_valid", rule.targetRepoName != null && rule.targetRepoName.endsWith(".git"));
@@ -47,20 +48,21 @@ final class GitService {
     }
 
     Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
-        ensureRepoReady(project);
+        ensureRepoReady(config, project);
         ensureTargetRemote(config, project, rule);
         RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
         String internalRemote = internalRemoteName(rule.id);
-        fetchOrigin(project.localRepoPath());
-        runChecked(project.localRepoPath(), List.of("git", "fetch", internalRemote, rule.targetBranch));
+        Path repoPath = project.localRepoPath(config);
+        fetchOrigin(repoPath);
+        runChecked(repoPath, List.of("git", "fetch", internalRemote, rule.targetBranch));
 
         String sourceRef = originRef(rule);
         String targetRef = internalRemote + "/" + rule.targetBranch;
-        boolean targetExists = branchExists(project.localRepoPath(), targetRef);
+        boolean targetExists = branchExists(repoPath, targetRef);
         String range = targetExists ? targetRef + ".." + sourceRef : sourceRef;
-        GitCommandResult commits = runChecked(project.localRepoPath(),
+        GitCommandResult commits = runChecked(repoPath,
             List.of("git", "log", "--oneline", "--no-merges", range));
-        GitCommandResult files = runChecked(project.localRepoPath(),
+        GitCommandResult files = runChecked(repoPath,
             targetExists
                 ? List.of("git", "diff", "--name-status", targetRef, sourceRef)
                 : List.of("git", "diff-tree", "--no-commit-id", "--name-status", "-r", sourceRef));
@@ -120,12 +122,13 @@ final class GitService {
             Models.require(reviewConfirmed, "Review confirmation is required");
         }
 
-        ensureRepoReady(project);
+        ensureRepoReady(config, project);
         ensureTargetRemote(config, project, rule);
         String internalRemote = internalRemoteName(rule.id);
+        Path repoPath = project.localRepoPath(config);
 
         List<GitCommandResult> results = new ArrayList<>();
-        syncVendorBranch(project, rule, results);
+        syncVendorBranch(config, project, rule, results);
 
         List<String> pushCommand = new ArrayList<>();
         pushCommand.add("git");
@@ -135,14 +138,14 @@ final class GitService {
         }
         pushCommand.add(internalRemote);
         pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
-        results.add(runChecked(project.localRepoPath(), pushCommand));
+        results.add(runChecked(repoPath, pushCommand));
 
         return new SyncResult(results);
     }
 
-    private void syncVendorBranch(ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
+    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
         throws IOException, InterruptedException {
-        Path repoPath = project.localRepoPath();
+        Path repoPath = project.localRepoPath(config);
         String originRef = originRef(rule);
         results.add(fetchOrigin(repoPath));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
@@ -151,8 +154,8 @@ final class GitService {
         results.add(runChecked(repoPath, List.of("git", "pull", "--ff-only", "origin", rule.sourceBranch)));
     }
 
-    private void ensureRepoReady(ProjectConfig project) throws IOException, InterruptedException {
-        Path repoPath = project.localRepoPath();
+    private void ensureRepoReady(AppConfig config, ProjectConfig project) throws IOException, InterruptedException {
+        Path repoPath = project.localRepoPath(config);
         if (!Files.exists(repoPath)) {
             Files.createDirectories(repoPath.getParent());
             runChecked(null, List.of("git", "clone", project.vendorRepoUrl, repoPath.toString()));
@@ -167,11 +170,12 @@ final class GitService {
     private void ensureTargetRemote(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         String name = internalRemoteName(rule.id);
         String targetUrl = targetRemoteUrl(config, rule);
-        String existingUrl = getRemoteUrl(project.localRepoPath(), name);
+        Path repoPath = project.localRepoPath(config);
+        String existingUrl = getRemoteUrl(repoPath, name);
         if (existingUrl == null) {
-            runChecked(project.localRepoPath(), List.of("git", "remote", "add", name, targetUrl));
+            runChecked(repoPath, List.of("git", "remote", "add", name, targetUrl));
         } else if (!existingUrl.equals(targetUrl)) {
-            runChecked(project.localRepoPath(), List.of("git", "remote", "set-url", name, targetUrl));
+            runChecked(repoPath, List.of("git", "remote", "set-url", name, targetUrl));
         }
     }
 

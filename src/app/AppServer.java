@@ -88,6 +88,23 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private void handleSystem(HttpExchange exchange) throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/system/config".equals(path)) {
+                AppConfig config = configService.getConfig();
+                HttpUtil.sendJson(exchange, 200, Map.of(
+                    "localWorkspaceRoot", config.localWorkspaceRoot == null ? "" : config.localWorkspaceRoot
+                ));
+                return;
+            }
+            if ("PUT".equals(exchange.getRequestMethod()) && "/api/system/config".equals(path)) {
+                Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                String localWorkspaceRoot = Models.nullableString(body.get("localWorkspaceRoot"));
+                configService.updateGlobalWorkspaceRoot(localWorkspaceRoot);
+                schedulerService.refreshScheduleState();
+                HttpUtil.sendJson(exchange, 200, Map.of(
+                    "localWorkspaceRoot", localWorkspaceRoot == null ? "" : localWorkspaceRoot
+                ));
+                return;
+            }
             if ("POST".equals(exchange.getRequestMethod()) && "/api/system/select-directory".equals(path)) {
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("path", selectDirectory());
@@ -310,7 +327,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         AppConfig config = configService.getConfig();
         for (ProjectConfig project : config.projects) {
             Map<String, Object> projectItem = new LinkedHashMap<>(project.toMap());
-            projectItem.put("localRepoPath", project.displayLocalRepoPath());
+            projectItem.put("localRepoPath", project.displayLocalRepoPath(config));
             List<Object> rules = new ArrayList<>();
             for (RuleConfig rule : project.rules) {
                 RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
@@ -340,7 +357,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         RuleSelection selection = Models.findRuleSelection(config, ruleId);
         ProjectConfig project = selection.project;
         RuleConfig rule = selection.rule;
-        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath().toAbsolutePath().normalize().toString(),
+        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath(config).toAbsolutePath().normalize().toString(),
             ignored -> new ReentrantLock());
         lock.lock();
         try {
@@ -362,7 +379,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 payload.put("ruleName", rule.name);
                 payload.put("status", "success");
                 payload.put("sourceBranch", rule.sourceBranch);
-                payload.put("localRepoPath", project.displayLocalRepoPath());
+                payload.put("localRepoPath", project.displayLocalRepoPath(config));
                 payload.put("targetRemoteId", rule.targetRemoteId);
                 payload.put("targetRepoName", rule.targetRepoName);
                 payload.put("targetBranch", rule.targetBranch);
