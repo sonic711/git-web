@@ -36,7 +36,6 @@ final class SchedulerService {
         for (ProjectConfig project : config.projects) {
             for (RuleConfig rule : project.rules) {
                 RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
-                runtimeStateService.recoverInterruptedRun(rule.id, "Recovered after service restart");
                 String nextRun = computeNextRun(rule, state);
                 runtimeStateService.setNextRun(rule.id, nextRun);
             }

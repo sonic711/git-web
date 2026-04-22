@@ -70,6 +70,22 @@ final class RuntimeStateService {
         save();
     }
 
+    synchronized void clearAllRunningStates(String lastMessage) throws IOException {
+        boolean changed = false;
+        for (RuleRuntimeState state : current.mappingStates.values()) {
+            if (!state.running) {
+                continue;
+            }
+            state.running = false;
+            state.lastStatus = "interrupted";
+            state.lastMessage = lastMessage;
+            changed = true;
+        }
+        if (changed) {
+            save();
+        }
+    }
+
     synchronized void delete(String mappingId) throws IOException {
         current.mappingStates.remove(mappingId);
         save();

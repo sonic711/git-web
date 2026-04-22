@@ -49,6 +49,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     }
 
     void start(int port) throws IOException {
+        runtimeStateService.clearAllRunningStates("Recovered after service restart");
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(Executors.newCachedThreadPool());
         server.createContext("/api/system", this::handleSystem);
