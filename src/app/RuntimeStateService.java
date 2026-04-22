@@ -59,6 +59,17 @@ final class RuntimeStateService {
         save();
     }
 
+    synchronized void recoverInterruptedRun(String mappingId, String lastMessage) throws IOException {
+        RuleRuntimeState state = getOrCreate(mappingId);
+        if (!state.running) {
+            return;
+        }
+        state.running = false;
+        state.lastStatus = "interrupted";
+        state.lastMessage = lastMessage;
+        save();
+    }
+
     synchronized void delete(String mappingId) throws IOException {
         current.mappingStates.remove(mappingId);
         save();

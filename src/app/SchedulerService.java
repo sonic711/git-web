@@ -36,6 +36,7 @@ final class SchedulerService {
         for (ProjectConfig project : config.projects) {
             for (RuleConfig rule : project.rules) {
                 RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
+                runtimeStateService.recoverInterruptedRun(rule.id, "Recovered after service restart");
                 String nextRun = computeNextRun(rule, state);
                 runtimeStateService.setNextRun(rule.id, nextRun);
             }
@@ -73,12 +74,19 @@ final class SchedulerService {
         if (rule.manualOnly || !rule.schedule.enabled) {
             return null;
         }
-        if (state.lastRunAt == null || state.lastRunAt.isBlank()) {
-            return OffsetDateTime.now(ZoneOffset.ofHours(8)).toString();
+        OffsetDateTime existingNextRun = parseTime(state.nextRunAt);
+        if (existingNextRun != null) {
+            return existingNextRun.toString();
         }
-        return OffsetDateTime.now(ZoneOffset.ofHours(8))
-            .plusMinutes(rule.schedule.intervalMinutes)
-            .toString();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.ofHours(8));
+        if (state.lastRunAt == null || state.lastRunAt.isBlank()) {
+            return now.toString();
+        }
+        OffsetDateTime lastRun = parseTime(state.lastRunAt);
+        if (lastRun == null) {
+            return now.toString();
+        }
+        return lastRun.plusMinutes(rule.schedule.intervalMinutes).toString();
     }
 
     private OffsetDateTime parseTime(String value) {
