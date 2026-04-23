@@ -156,6 +156,14 @@
 5. 使用者點選單一 commit 時，可看到該 commit 的異動檔案清單
 6. 使用者勾選要同步的 commit，並完成人工確認後才可執行同步
 
+commit-based push 限制：
+
+- 後端會以目標 branch 為基準建立暫時分支，並以 `git cherry-pick` 套用選取的 commit。
+- 若選取 commit 依賴未選取的前置 commit，可能發生 cherry-pick conflict。
+- 若目標 branch 已修改同一段內容，也可能發生 cherry-pick conflict。
+- 發生 conflict 時，本次同步應失敗並中止，不進行 push。
+- 目前不提供 UI 解衝突，也不會自動改成整支 branch push。
+
 ## Git 指令邏輯
 
 以下為建議流程：
@@ -205,6 +213,7 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 - SSH 權限不足
 - HTTPS 認證失敗
 - push 被拒絕
+- selected commit 無法 cherry-pick 到目標 branch
 - force push 被使用者規則禁止
 - manual-only 規則被排程觸發
 - review-required 規則未先確認就嘗試同步

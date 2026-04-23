@@ -58,7 +58,9 @@
 
 目前正式規格已要求 review-required rule 先看差異再同步，但尚未定義：
 
-- commit-based push 是否限制為連續 commit
-- 是否要支援多選非連續 commit
+- 是否要在 UI 強制選取連續 commit，以降低 cherry-pick conflict 機率
+- 是否要支援多選非連續 commit，並接受 cherry-pick 可能失敗
+- 是否要加入同步前 dry-run cherry-pick 檢查
+- cherry-pick conflict 是否要提供 UI 解衝突，或維持失敗後由使用者重選 commit
 - 是否需要顯示檔案 diff 摘要
 - 是否需要保存人工確認紀錄

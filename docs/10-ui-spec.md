@@ -174,6 +174,8 @@
 4. 只有在人工確認後才可按 `推送已選 commit`
 5. 此確認僅對當次同步有效，不寫入主設定檔
 6. 本階段不顯示實際 patch 內容，僅顯示檔案清單
+7. UI 需提示使用者：只選部分 commit 時，若該 commit 依賴未選取的前置 commit，可能導致 cherry-pick 衝突
+8. 若後端回傳 cherry-pick conflict，UI 應顯示「所選 commit 無法套用到目標 branch，請改選相關 commit 或改用整支同步」
 
 ## 6. 執行結果 / Log 頁
 

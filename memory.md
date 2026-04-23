@@ -56,6 +56,7 @@
 - log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
 - `查看差異` 需改為 commit-based review：先顯示 ahead commit 清單，再點選單一 commit 顯示異動檔案清單。
 - review 畫面需支援勾選一個或多個 commit，並以 `selectedCommitIds` 執行同步。
+- commit-based sync 目前透過 `git cherry-pick` 套用選取 commit，若 commit 有相依或目標 branch 已修改同一段內容，可能衝突並導致同步失敗。
 - 實際 patch 內容不在本階段提供，列為後續功能。
 
 ## 檔案結構決策
@@ -163,4 +164,5 @@
 - review 視窗先讀 ahead commit 摘要快取，必要時可手動刷新最新差異。
 - 點擊單一 commit 時，後端回傳該 commit 的異動檔案清單，不再以舊 patch viewer 作為主流程。
 - 使用者可勾選一個或多個 commit，並以 `selectedCommitIds` 直接執行同步。
+- selected commit 會由後端依來源歷史順序 cherry-pick；若發生 conflict，後端會中止同步，不會 push。
 - 實際 patch 內容已從本階段正式規格移除，列為後續功能。
