@@ -53,7 +53,7 @@
 - 自動同步需允許不同本地 repo 的專案並行執行；只有限制同一本地 repo 的規則需排隊。
 - UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
-- log 檔只保留一天，超過一天的 `.log` 需自動清理。
+- log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
 - `查看差異` 需使用獨立頁面呈現，左側列差異檔案、右側顯示與 `git diff` 一致的 `+/-` patch 內容。
 - 為避免大型差異 timeout，差異頁需先載入檔案清單，右側單檔 patch 僅在點擊左側檔案時才載入。
 
@@ -76,7 +76,7 @@
 
 - 主設定檔：`config/settings.json`
 - 本機執行狀態檔：`state/runtime-state.json`
-- 執行紀錄：`logs/*.log`
+- 執行紀錄：`logs/YYYY-MM-DD.log`
 - 差異快取：`cache/diff/*`
 
 主設定檔保存：

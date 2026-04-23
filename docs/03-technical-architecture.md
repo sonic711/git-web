@@ -44,7 +44,7 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 | Local Files                 |
 | - config/settings.json      |
 | - state/runtime-state.json  |
-| - logs/*.log                |
+| - logs/YYYY-MM-DD.log       |
 +-----------------------------+
 ```
 
@@ -201,7 +201,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - `POST /api/mappings/{id}/diff`
 - `POST /api/mappings/{id}/validate`
 - `POST /api/mappings/{id}/sync`
-- `GET /api/logs/{runId}`
+- `GET /api/logs/{logId}`
 
 設定維護要求：
 

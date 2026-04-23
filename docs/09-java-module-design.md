@@ -93,9 +93,10 @@
 
 職責：
 
-- 寫入 `logs/*.log`
-- 讀取單筆 log
-- 提供 runId 與 logPath 對應
+- 寫入 `logs/YYYY-MM-DD.log`
+- 以每日單檔方式持續追加執行紀錄
+- 讀取指定每日 log 檔
+- 啟動與寫入時刪除非當日 log
 
 ## Controller 建議
 
@@ -121,7 +122,7 @@
 
 ### `LogController`
 
-- `GET /api/logs/{runId}`
+- `GET /api/logs/{logId}`
 
 ## Domain Model 建議
 
@@ -171,6 +172,7 @@
 - `OffsetDateTime nextRunAt`
 - `boolean running`
 - `String lastLogPath`
+  保存每日 log 檔名，例如 `2026-04-20.log`
 
 ## 開發順序建議
 

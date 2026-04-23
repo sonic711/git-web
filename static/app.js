@@ -673,8 +673,8 @@ async function runSync(ruleId) {
     );
     document.getElementById('logView').textContent = JSON.stringify(result, null, 2);
     await loadAll({ silent: true });
-    if (result.runId) {
-      await loadLog(result.runId);
+    if (result.logPath) {
+      await loadLog(result.logPath);
     }
     showToast(result.message || '同步成功', 'success');
   } catch (error) {
@@ -746,9 +746,9 @@ function startAutoRefresh() {
   }, 10000);
 }
 
-async function loadLog(runId) {
+async function loadLog(logId) {
   try {
-    const log = await withLoading('載入執行紀錄中...', () => api(`/api/logs/${runId}`));
+    const log = await withLoading('載入執行紀錄中...', () => api(`/api/logs/${encodeURIComponent(logId)}`));
     document.getElementById('logView').textContent = log.content || '(empty log)';
   } catch (error) {
     showToast(error.message, 'error');

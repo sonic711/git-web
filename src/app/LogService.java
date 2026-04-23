@@ -4,15 +4,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.stream.Stream;
 
 final class LogService {
     private final Path logsDir;
+    private static final ZoneOffset ZONE_OFFSET = ZoneOffset.ofHours(8);
+    private static final DateTimeFormatter RUN_ID_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss");
+    private static final DateTimeFormatter DAILY_LOG_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     LogService(Path logsDir) throws IOException {
         this.logsDir = logsDir;
@@ -21,20 +23,26 @@ final class LogService {
     }
 
     String createRunId(String mappingId) {
-        String timestamp = OffsetDateTime.now(ZoneOffset.ofHours(8))
-            .format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"));
+        String timestamp = OffsetDateTime.now(ZONE_OFFSET).format(RUN_ID_FORMATTER);
         return timestamp + "-" + mappingId;
     }
 
     String writeLog(String runId, String content) throws IOException {
         purgeExpiredLogs();
-        Path path = logsDir.resolve(runId + ".log");
-        Files.writeString(path, content, StandardCharsets.UTF_8);
-        return logsDir.relativize(path).toString().replace('\\', '/');
+        Path path = dailyLogPath();
+        StringBuilder builder = new StringBuilder();
+        builder.append("\n===== ").append(runId).append(" =====\n");
+        builder.append(content);
+        if (!content.endsWith("\n")) {
+            builder.append('\n');
+        }
+        Files.writeString(path, builder.toString(), StandardCharsets.UTF_8,
+            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        return path.getFileName().toString();
     }
 
-    String readLog(String runId) throws IOException {
-        Path path = logsDir.resolve(runId + ".log");
+    String readLog(String logId) throws IOException {
+        Path path = resolveLogPath(logId);
         if (!Files.exists(path)) {
             return "";
         }
@@ -42,23 +50,37 @@ final class LogService {
     }
 
     private void purgeExpiredLogs() throws IOException {
-        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.ofHours(8)).minus(1, ChronoUnit.DAYS);
+        String todayFileName = dailyLogFileName();
         try (Stream<Path> stream = Files.list(logsDir)) {
             stream
                 .filter(Files::isRegularFile)
                 .filter(path -> path.getFileName().toString().endsWith(".log"))
-                .forEach(path -> deleteIfExpired(path, cutoff));
+                .filter(path -> !path.getFileName().toString().equals(todayFileName))
+                .forEach(this::deleteQuietly);
         }
     }
 
-    private void deleteIfExpired(Path path, OffsetDateTime cutoff) {
+    private void deleteQuietly(Path path) {
         try {
-            FileTime lastModified = Files.getLastModifiedTime(path);
-            OffsetDateTime fileTime = lastModified.toInstant().atOffset(ZoneOffset.ofHours(8));
-            if (fileTime.isBefore(cutoff)) {
-                Files.deleteIfExists(path);
-            }
+            Files.deleteIfExists(path);
         } catch (IOException ignored) {
         }
+    }
+
+    private Path dailyLogPath() {
+        return logsDir.resolve(dailyLogFileName());
+    }
+
+    private String dailyLogFileName() {
+        LocalDate today = OffsetDateTime.now(ZONE_OFFSET).toLocalDate();
+        return today.format(DAILY_LOG_FORMATTER) + ".log";
+    }
+
+    private Path resolveLogPath(String logId) {
+        String safeName = Path.of(logId).getFileName().toString();
+        if (!safeName.endsWith(".log")) {
+            safeName = safeName + ".log";
+        }
+        return logsDir.resolve(safeName).normalize();
     }
 }

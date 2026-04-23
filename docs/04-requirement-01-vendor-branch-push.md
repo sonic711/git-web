@@ -255,7 +255,7 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
   "forcePush": true,
   "reviewConfirmed": true,
   "summary": "Push completed",
-  "logPath": "logs/20260420T184500-map-sit.log"
+  "logPath": "2026-04-20.log"
 }
 ```
 

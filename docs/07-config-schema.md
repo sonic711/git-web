@@ -172,7 +172,7 @@
       "lastRunSource": "manual",
       "nextRunAt": null,
       "running": false,
-      "lastLogPath": "logs/20260420T213000-map-uat.log"
+      "lastLogPath": "2026-04-20.log"
     }
   }
 }
@@ -186,6 +186,7 @@
 - `nextRunAt`: `string | null`
 - `running`: `boolean`
 - `lastLogPath`: `string | null`
+  內容為每日 log 檔名，例如 `2026-04-20.log`
 - `lastMessage`: `string | null`
 
 ## 匯入匯出規則

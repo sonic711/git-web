@@ -250,7 +250,7 @@
   "forcePush": true,
   "reviewConfirmed": true,
   "message": "Sync completed",
-  "logPath": "logs/20260420T220000-map-uat.log"
+  "logPath": "2026-04-20.log"
 }
 ```
 
@@ -303,22 +303,18 @@
 
 ## Log API
 
-### `GET /api/logs/{runId}`
+### `GET /api/logs/{logId}`
 
 用途：
 
-- 取得單筆執行紀錄
+- 取得指定每日 log 檔案內容
+- `logId` 可直接使用 `lastLogPath` 或 sync 回應中的 `logPath`
 
 回應範例：
 
 ```json
 {
-  "runId": "20260420T220000-map-uat",
-  "status": "success",
-  "triggerSource": "manual",
-  "forcePush": true,
-  "reviewConfirmed": true,
-  "stdout": "...",
-  "stderr": ""
+  "logId": "2026-04-20.log",
+  "content": "===== 20260420T220000-map-uat =====\n..."
 }
 ```

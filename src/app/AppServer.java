@@ -387,10 +387,10 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
                 return;
             }
-            String runId = path.substring("/api/logs/".length());
+            String logId = path.substring("/api/logs/".length());
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("runId", runId);
-            payload.put("content", logService.readLog(runId));
+            payload.put("logId", logId);
+            payload.put("content", logService.readLog(logId));
             HttpUtil.sendJson(exchange, 200, payload);
         } catch (Exception exception) {
             HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
