@@ -32,6 +32,7 @@ final class DiffCacheService {
         writeJson(summaryPath(ruleId), summary);
         clearPatchCache(ruleId);
         clearSnapshotCache(ruleId);
+        clearCommitFileCache(ruleId);
         Map<String, Object> meta = defaultMeta();
         meta.put("cachedAt", Models.nowIso());
         meta.put("cacheStatus", "fresh");
@@ -75,6 +76,18 @@ final class DiffCacheService {
         payload.put("headExists", headExists);
         payload.put("headContent", headContent == null ? "" : headContent);
         writeJson(snapshotPath, payload);
+    }
+
+    synchronized Map<String, Object> readCommitFiles(String ruleId, String commitId) throws IOException {
+        Path path = commitFilesPath(ruleId, commitId);
+        if (!Files.exists(path)) {
+            return null;
+        }
+        return readJson(path);
+    }
+
+    synchronized void writeCommitFiles(String ruleId, String commitId, Map<String, Object> payload) throws IOException {
+        writeJson(commitFilesPath(ruleId, commitId), payload);
     }
 
     synchronized void markStale(String ruleId, String message) throws IOException {
@@ -180,6 +193,18 @@ final class DiffCacheService {
         }
     }
 
+    private void clearCommitFileCache(String ruleId) throws IOException {
+        Path commitsDir = commitsDir(ruleId);
+        if (!Files.exists(commitsDir)) {
+            return;
+        }
+        try (var walk = Files.walk(commitsDir)) {
+            for (Path path : walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     private Path ruleRoot(String ruleId) {
         return cacheRoot.resolve(ruleId);
     }
@@ -200,12 +225,20 @@ final class DiffCacheService {
         return ruleRoot(ruleId).resolve("snapshots");
     }
 
+    private Path commitsDir(String ruleId) {
+        return ruleRoot(ruleId).resolve("commits");
+    }
+
     private Path patchPath(String ruleId, String path, String oldPath) {
         return patchesDir(ruleId).resolve(hashKey((oldPath == null ? "" : oldPath) + "=>" + path) + ".patch");
     }
 
     private Path snapshotPath(String ruleId, String path, String oldPath) {
         return snapshotsDir(ruleId).resolve(hashKey((oldPath == null ? "" : oldPath) + "=>" + path) + ".json");
+    }
+
+    private Path commitFilesPath(String ruleId, String commitId) {
+        return commitsDir(ruleId).resolve(hashKey(commitId) + ".json");
     }
 
     private String hashKey(String value) {

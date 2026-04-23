@@ -58,8 +58,9 @@
 5. 排程執行後 UI 必須自動刷新最後結果與下次執行時間
 6. 若 `reviewRequired=true`，`同步` 前需先點 `查看差異`
 7. 若 `reviewRequired=true` 且未人工確認，`同步` 按鈕需 disabled
-8. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
-9. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
+8. 若 review 畫面尚未選取 commit，不得允許 commit-based push
+9. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
+10. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
 
 ## 2. Mapping Modal
 
@@ -143,7 +144,9 @@
 
 用途：
 
-- 顯示 review-required mapping 的變更資訊
+- 顯示 review-required mapping 的 ahead commit 清單
+- 顯示單一 commit 的異動檔案清單
+- 讓使用者以挑選 commit 的方式執行同步
 
 欄位：
 
@@ -153,18 +156,24 @@
 - Ahead commits 數量
 - Changed files 數量
 - Commit list
-- Changed files list
+- Selected commit count
+- 單一 commit 的檔案清單
 
 操作：
 
+- `勾選 commit`
 - `人工確認本次同步`
 - `返回列表`
-- `繼續同步`
+- `推送已選 commit`
 
 互動規則：
 
-1. 只有在人工確認後才可按 `繼續同步`
-2. 此確認僅對當次同步有效，不寫入主設定檔
+1. 頁面開啟後，先顯示 ahead commit 清單
+2. 點擊 commit 時，右側或下方顯示該 commit 的異動檔案清單
+3. 使用者可勾選一個或多個 commit，作為本次要同步的內容
+4. 只有在人工確認後才可按 `推送已選 commit`
+5. 此確認僅對當次同步有效，不寫入主設定檔
+6. 本階段不顯示實際 patch 內容，僅顯示檔案清單
 
 ## 6. 執行結果 / Log 頁
 
@@ -217,9 +226,13 @@
 ### 查看差異並同步
 
 1. 呼叫 `POST /api/mappings/{id}/diff`
-2. 顯示差異摘要與檔案清單
-3. 使用者人工確認
-4. 呼叫 `POST /api/mappings/{id}/sync`
+2. 顯示 ahead commit 清單
+3. 使用者點擊 commit，UI 呼叫 `GET /api/mappings/{id}/diff/commits/{commitId}/files`
+4. 顯示該 commit 的異動檔案清單
+5. 使用者勾選要同步的 commit
+6. 使用者人工確認
+7. 呼叫 `POST /api/mappings/{id}/sync`
+8. request body 帶入 `selectedCommitIds`
 
 ### 刪除
 

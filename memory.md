@@ -34,7 +34,7 @@
 - 系統需支援多專案定時推送。
 - 來源與目標分支通常同名，系統需支援同名分支為預設模式。
 - 某些 mapping 需標記為 `manualOnly=true`，不得自動排程。
-- 某些 mapping 需標記為 `reviewRequired=true`，同步前需先看 diff 並人工確認。
+- 某些 mapping 需標記為 `reviewRequired=true`，同步前需先看 ahead commit 並人工確認。
 - UI 必須可隨時修改 remote、branch、是否自動同步等設定，並寫回 `config/settings.json`。
 - 本機目錄應可由 UI 直接選資料夾，不以手打路徑為主要方式。
 - Mappings 列表需提供行內 `Force Push` 與 `自動同步` 勾選。
@@ -54,8 +54,9 @@
 - UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
 - log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
-- `查看差異` 需使用獨立頁面呈現，左側列差異檔案、右側顯示與 `git diff` 一致的 `+/-` patch 內容。
-- 為避免大型差異 timeout，差異頁需先載入檔案清單，右側單檔 patch 僅在點擊左側檔案時才載入。
+- `查看差異` 需改為 commit-based review：先顯示 ahead commit 清單，再點選單一 commit 顯示異動檔案清單。
+- review 畫面需支援勾選一個或多個 commit，並以 `selectedCommitIds` 執行同步。
+- 實際 patch 內容不在本階段提供，列為後續功能。
 
 ## 檔案結構決策
 
@@ -112,7 +113,7 @@
 - 排程格式是否只做固定間隔
 - 共用機器時的併發保護
 - `git push -f` 未來是否改成 `--force-with-lease`
-- review gate 的差異呈現粒度要到 commit list 還是 file diff
+- commit-based push 是否限制為連續 commit
 
 ## 建議下一步
 
@@ -161,3 +162,4 @@
 - 差異頁已改為懶載入單檔 patch：初次只抓檔案清單，點擊檔案時才呼叫單檔 diff API，避免 timeout。
 - 已新增 Phase 2 差異快取規格，定義摘要快取、單檔 patch 快取、API、TTL、失效與 UI 流程。
 - Phase 2 已開始實作差異快取 MVP：新增 `DiffCacheService`、cache-first 差異頁、手動刷新摘要與單檔 patch 快取。
+- 已更新文件，將 `查看差異` 正式改為 commit-based review：先看 commit 清單、點 commit 看檔案清單、從勾選 commit 直接 push；實際 patch 內容延後。

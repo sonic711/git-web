@@ -9,12 +9,13 @@
 <body class="diff-page">
   <header class="hero">
     <div>
-      <h1>Diff Review</h1>
+      <h1>Commit Review</h1>
       <p id="diffPageSubtitle">載入差異中...</p>
     </div>
     <div class="inline-actions">
       <button type="button" class="secondary" id="reloadDiffButton">抓取最新差異</button>
       <button type="button" id="confirmReviewButton">人工確認本次同步</button>
+      <button type="button" id="pushSelectedCommitsButton">推送已選 Commit</button>
     </div>
   </header>
 
@@ -29,16 +30,23 @@
   <main class="layout">
     <section class="panel">
       <div id="diffMeta" class="diff-meta-grid"></div>
+      <div class="inline-actions diff-toolbar">
+        <label class="mini-check">
+          <input type="checkbox" id="diffForcePushCheckbox">
+          Force Push
+        </label>
+        <div id="selectedCommitSummary" class="panel-copy">尚未選擇 commit</div>
+      </div>
     </section>
 
     <section class="panel diff-shell">
       <aside class="diff-sidebar">
-        <div class="diff-sidebar-head">差異檔案</div>
-        <div id="diffFileList" class="diff-file-list"></div>
+        <div class="diff-sidebar-head">Ahead Commits</div>
+        <div id="diffCommitList" class="diff-file-list"></div>
       </aside>
       <section class="diff-content">
-        <div id="diffFileTitle" class="diff-file-title">請從左側選擇檔案</div>
-        <pre id="diffPatchView" class="diff-patch-view">尚未載入差異內容</pre>
+        <div id="diffFileTitle" class="diff-file-title">請從左側選擇 commit</div>
+        <div id="diffCommitFilesView" class="viewer">尚未載入 commit 檔案清單</div>
       </section>
     </section>
   </main>

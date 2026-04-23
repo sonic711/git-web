@@ -3,8 +3,7 @@ const state = {
   remotes: [],
   systemConfig: { localWorkspaceRoot: '' },
   selectedRemoteTab: 'all',
-  selectedDiffRuleId: null,
-  diffConfirmed: false,
+  reviewSelections: {},
   rowForcePush: {},
   collapsedProjects: {},
   autoRefreshTimer: null,
@@ -74,7 +73,11 @@ function remoteById(id) {
 }
 
 function isReviewReady(ruleId) {
-  return state.selectedDiffRuleId === ruleId && state.diffConfirmed;
+  return !!state.reviewSelections[ruleId]?.confirmed;
+}
+
+function selectedCommitIdsFor(ruleId) {
+  return state.reviewSelections[ruleId]?.selectedCommitIds || [];
 }
 
 function openModal(id) {
@@ -164,6 +167,7 @@ function renderRuleRow(project, rule) {
     : rule.lastStatus === 'success' ? 'success'
     : rule.lastStatus === 'running' ? 'running' : '';
   const reviewReady = isReviewReady(rule.id);
+  const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
   const syncDisabled = rule.reviewRequired && !reviewReady;
   return `
     <tr>
@@ -177,6 +181,7 @@ function renderRuleRow(project, rule) {
         <div class="stacked-copy">
           <span><code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code></span>
           <span>${rule.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}</span>
+          <span>${selectedCommitCount ? `<span class="tag success">${selectedCommitCount} commits</span>` : ''}</span>
         </div>
       </td>
       <td>
@@ -632,8 +637,7 @@ async function validateRule(ruleId) {
 
 async function showDiff(ruleId) {
   try {
-    state.selectedDiffRuleId = ruleId;
-    state.diffConfirmed = false;
+    state.reviewSelections[ruleId] = { confirmed: false, selectedCommitIds: [] };
     const popup = window.open(`/diff.html?ruleId=${encodeURIComponent(ruleId)}`, `diff-review-${ruleId}`,
       'popup=yes,width=1480,height=960,resizable=yes,scrollbars=yes');
     if (!popup) {
@@ -647,9 +651,11 @@ async function showDiff(ruleId) {
   }
 }
 
-function confirmDiffReview(ruleId, showNotice = true) {
-  state.selectedDiffRuleId = ruleId;
-  state.diffConfirmed = true;
+function confirmDiffReview(ruleId, selectedCommitIds = [], showNotice = true) {
+  state.reviewSelections[ruleId] = {
+    confirmed: true,
+    selectedCommitIds: [...selectedCommitIds],
+  };
   renderProjects();
   if (showNotice) {
     showToast('已完成本次人工確認', 'success');
@@ -662,13 +668,17 @@ async function runSync(ruleId) {
     if (!selection) return;
     const forcePush = !!state.rowForcePush[ruleId] && !!selection.rule.allowForcePush;
     const reviewConfirmed = !selection.rule.reviewRequired || isReviewReady(ruleId);
+    const selectedCommitIds = selection.rule.reviewRequired ? selectedCommitIdsFor(ruleId) : [];
     if (selection.rule.reviewRequired && !reviewConfirmed) {
       throw new Error('這筆規則需要先查看差異並完成人工確認');
+    }
+    if (selection.rule.reviewRequired && !selectedCommitIds.length) {
+      throw new Error('請先在查看差異畫面中選擇至少一筆 commit');
     }
     const result = await withLoading('同步中，請稍候...', () =>
       api(`/api/rules/${ruleId}/sync`, {
         method: 'POST',
-        body: JSON.stringify({ forcePush, reviewConfirmed }),
+        body: JSON.stringify({ forcePush, reviewConfirmed, selectedCommitIds }),
       })
     );
     document.getElementById('logView').textContent = JSON.stringify(result, null, 2);
@@ -707,11 +717,8 @@ async function deleteRule(projectId, ruleId) {
     await withLoading('刪除同步規則中...', () =>
       api(`/api/projects/${projectId}/rules/${ruleId}`, { method: 'DELETE' })
     );
-    if (state.selectedDiffRuleId === ruleId) {
-      state.selectedDiffRuleId = null;
-      state.diffConfirmed = false;
-      document.getElementById('diffView').textContent = '尚未載入差異';
-    }
+    delete state.reviewSelections[ruleId];
+    document.getElementById('diffView').textContent = '尚未載入差異';
     await loadAll({ silent: true });
     showToast('同步規則已刪除', 'success');
   } catch (error) {
@@ -823,7 +830,18 @@ window.addEventListener('message', event => {
   }
   const data = event.data || {};
   if (data.type === 'diff-review-confirmed' && data.ruleId) {
-    confirmDiffReview(data.ruleId);
+    confirmDiffReview(data.ruleId, data.selectedCommitIds || []);
+  }
+  if (data.type === 'diff-sync-completed' && data.ruleId) {
+    confirmDiffReview(data.ruleId, data.selectedCommitIds || [], false);
+    loadAll({ silent: true })
+      .then(async () => {
+        if (data.logPath) {
+          await loadLog(data.logPath);
+        }
+        showToast(data.message || '同步成功', 'success');
+      })
+      .catch(error => showToast(error.message, 'error'));
   }
 });
 

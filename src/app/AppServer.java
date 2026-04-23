@@ -275,7 +275,8 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                     boolean forcePush = Models.booleanValue(body.getOrDefault("forcePush", Boolean.FALSE));
                     boolean reviewConfirmed = Models.booleanValue(body.getOrDefault("reviewConfirmed", Boolean.FALSE));
-                    HttpUtil.sendJson(exchange, 200, sync(ruleId, forcePush, reviewConfirmed, "manual"));
+                    HttpUtil.sendJson(exchange, 200, sync(ruleId, forcePush, reviewConfirmed,
+                        parseSelectedCommitIds(body.get("selectedCommitIds")), "manual"));
                     return;
                 }
                 if ("schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
@@ -286,6 +287,20 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     HttpUtil.sendJson(exchange, 200, selection.rule.toMap());
                     return;
                 }
+            }
+            if (parts.length == 8 && "api".equals(parts[1]) && "rules".equals(parts[2]) && "diff".equals(parts[4])
+                && "commits".equals(parts[5]) && "files".equals(parts[7]) && "GET".equals(exchange.getRequestMethod())) {
+                String ruleId = parts[3];
+                String commitId = parts[6];
+                RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
+                Map<String, Object> cached = diffCacheService.readCommitFiles(ruleId, commitId);
+                if (cached == null) {
+                    cached = gitService.commitFiles(configService.getConfig(), selection.project, commitId);
+                    cached.put("ruleId", ruleId);
+                    diffCacheService.writeCommitFiles(ruleId, commitId, cached);
+                }
+                HttpUtil.sendJson(exchange, 200, cached);
+                return;
             }
             if (parts.length == 6 && "api".equals(parts[1]) && "rules".equals(parts[2]) && "diff-cache".equals(parts[4])) {
                 String ruleId = parts[3];
@@ -444,6 +459,12 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
 
     private Map<String, Object> sync(String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource)
         throws Exception {
+        return sync(ruleId, forcePush, reviewConfirmed, List.of(), triggerSource);
+    }
+
+    private Map<String, Object> sync(String ruleId, boolean forcePush, boolean reviewConfirmed, List<String> selectedCommitIds,
+                                     String triggerSource)
+        throws Exception {
         AppConfig config = configService.getConfig();
         RuleSelection selection = Models.findRuleSelection(config, ruleId);
         ProjectConfig project = selection.project;
@@ -455,7 +476,8 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             runtimeStateService.markRunning(rule.id, true);
             String runId = logService.createRunId(rule.id);
             try {
-                GitService.SyncResult result = gitService.sync(config, project, rule, forcePush, reviewConfirmed, triggerSource);
+                GitService.SyncResult result = gitService.sync(config, project, rule, forcePush, reviewConfirmed,
+                    selectedCommitIds, triggerSource);
                 String logPath = logService.writeLog(runId, result.asLogText(project.id, rule.id, forcePush, reviewConfirmed,
                     triggerSource));
                 String nextRun = rule.manualOnly || !rule.schedule.enabled ? null
@@ -478,6 +500,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 payload.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
                 payload.put("forcePush", forcePush);
                 payload.put("reviewConfirmed", reviewConfirmed);
+                payload.put("selectedCommitIds", selectedCommitIds);
                 payload.put("message", "Sync completed");
                 payload.put("logPath", logPath);
                 return payload;
@@ -512,34 +535,21 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private Map<String, Object> refreshDiffCache(RuleSelection selection) throws Exception {
         try {
             Map<String, Object> summary = gitService.diff(configService.getConfig(), selection.project, selection.rule);
-            Map<String, Object> cachedSummary =
-                diffCacheService.writeSummary(selection.rule.id, summary, "Manual refresh completed");
-            String compareBase = Models.stringValue(summary.get("compareBase"));
-            String compareHead = Models.stringValue(summary.get("compareHead"));
-            for (Object item : Json.asList(summary.getOrDefault("files", List.of()))) {
-                Map<String, Object> file = Json.asObject(item);
-                String path = Models.stringValue(file.get("path"));
-                String oldPath = Models.nullableString(file.get("oldPath"));
-                Map<String, Object> snapshot = gitService.collectDiffFileSnapshot(
-                    configService.getConfig(),
-                    selection.project,
-                    path,
-                    oldPath,
-                    compareBase,
-                    compareHead);
-                diffCacheService.writeSnapshot(
-                    selection.rule.id,
-                    path,
-                    oldPath,
-                    Models.booleanValue(snapshot.get("baseExists")),
-                    Models.nullableString(snapshot.get("baseContent")),
-                    Models.booleanValue(snapshot.get("headExists")),
-                    Models.nullableString(snapshot.get("headContent")));
-            }
-            return cachedSummary;
+            return diffCacheService.writeSummary(selection.rule.id, summary, "Manual refresh completed");
         } catch (Exception exception) {
             diffCacheService.markFailed(selection.rule.id, exception.getMessage());
             throw exception;
         }
+    }
+
+    private List<String> parseSelectedCommitIds(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<String> commitIds = new ArrayList<>();
+        for (Object item : Json.asList(raw)) {
+            commitIds.add(Models.stringValue(item));
+        }
+        return commitIds;
     }
 }

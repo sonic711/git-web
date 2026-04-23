@@ -58,7 +58,7 @@
 
 目前正式規格已要求 review-required mapping 先看差異再同步，但尚未定義：
 
-- UI 只顯示 commit list 是否足夠
-- 是否需要顯示 changed files 清單
+- commit-based push 是否限制為連續 commit
+- 是否要支援多選非連續 commit
 - 是否需要顯示檔案 diff 摘要
 - 是否需要保存人工確認紀錄

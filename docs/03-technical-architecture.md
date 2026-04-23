@@ -199,6 +199,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - `GET /api/schedules`
 - `PUT /api/mappings/{id}/schedule`
 - `POST /api/mappings/{id}/diff`
+- `GET /api/mappings/{id}/diff/commits/{commitId}/files`
 - `POST /api/mappings/{id}/validate`
 - `POST /api/mappings/{id}/sync`
 - `GET /api/logs/{logId}`
@@ -216,7 +217,8 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 ```json
 {
   "forcePush": true,
-  "reviewConfirmed": false
+  "reviewConfirmed": false,
+  "selectedCommitIds": ["abc1234", "def5678"]
 }
 ```
 
@@ -225,6 +227,8 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - `forcePush=true` 表示本次同步需加上 `git push -f`
 - 若規則本身 `allowForcePush=false`，後端必須拒絕此請求
 - 若規則本身 `reviewRequired=true`，則 `reviewConfirmed` 必須為 `true`
+- 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支來源 branch 的全量 push
+- `selectedCommitIds` 應依來源 branch 的歷史順序傳入
 
 ## `POST /api/mappings/{id}/diff`
 
@@ -242,7 +246,38 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
   "commits": [
     {
       "id": "abc1234",
-      "title": "Fix payment validation"
+      "title": "Fix payment validation",
+      "author": "SeanLiu",
+      "committedAt": "2026-04-23T10:00:00+08:00",
+      "selectable": true
+    }
+  ]
+}
+```
+
+說明：
+
+- 此 API 回傳目前來源分支相對目標分支的 ahead commit 清單
+- UI 應以 commit 清單作為 review 與選擇同步內容的主軸
+- 本階段不提供實際 patch 內容
+
+## `GET /api/mappings/{id}/diff/commits/{commitId}/files`
+
+回應體建議：
+
+```json
+{
+  "mappingId": "map-uat",
+  "commitId": "abc1234",
+  "title": "Fix payment validation",
+  "files": [
+    {
+      "status": "M",
+      "path": "src/payment/Validator.java"
+    },
+    {
+      "status": "A",
+      "path": "src/payment/ValidatorTest.java"
     }
   ]
 }
@@ -259,8 +294,10 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 5. 驗證 `origin/<sourceBranch>` 存在。
 6. 將本地來源分支強制對齊 `origin/<sourceBranch>`，再執行 `git pull --ff-only origin <sourceBranch>`。
 7. 建立或更新系統管理的 target remote。
-8. 若 `reviewRequired=true`，先要求 UI 透過 diff API 顯示差異並人工確認。
-9. 執行 `git push` 或 `git push -f`。
+8. 若 `reviewRequired=true`，先要求 UI 透過 diff API 顯示 ahead commit 清單。
+9. 使用者可挑選一個或多個 commit，並查看單一 commit 的異動檔案清單。
+10. 若本次為 commit-based push，後端以目標 branch 為基準建立暫時同步分支，依順序套用選取的 commit。
+11. 執行 `git push` 或 `git push -f`。
 
 ## 排程執行策略
 

@@ -1,8 +1,9 @@
 const diffState = {
   ruleId: '',
   diff: null,
-  selectedFileIndex: -1,
-  patchCache: {},
+  selectedCommitId: null,
+  commitFileCache: {},
+  selectedCommitIds: [],
   confirmed: false,
   loadingCount: 0,
 };
@@ -62,6 +63,10 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll('`', '&#96;');
+}
+
 function formatDateTime(value) {
   if (!value) {
     return '-';
@@ -87,24 +92,21 @@ async function loadCachedSummary() {
     applySummary(diff);
     showToast('已載入差異快取', 'success');
   } catch (error) {
-    diffState.diff = null;
-    diffState.selectedFileIndex = -1;
-    diffState.patchCache = {};
-    render();
+    clearSummary();
     if (error.code === 'DIFF_CACHE_NOT_FOUND') {
       document.getElementById('diffPageSubtitle').textContent = '尚未建立差異快取，請按「抓取最新差異」';
-      document.getElementById('diffPatchView').textContent = '尚未建立差異快取，請按右上角「抓取最新差異」。';
+      document.getElementById('diffCommitFilesView').textContent = '尚未建立差異快取，請按右上角「抓取最新差異」。';
       showToast('尚未建立差異快取', 'error');
       return;
     }
     showToast(error.message, 'error');
-    document.getElementById('diffPatchView').textContent = error.message;
+    document.getElementById('diffCommitFilesView').textContent = error.message;
   }
 }
 
 async function refreshDiffSummary() {
   try {
-    const diff = await withLoading('抓取最新差異並建立檔案快取中...', () =>
+    const diff = await withLoading('抓取最新差異並建立 commit 快取中...', () =>
       api(`/api/rules/${diffState.ruleId}/diff-cache/refresh`, { method: 'POST' })
     );
     applySummary(diff);
@@ -114,19 +116,32 @@ async function refreshDiffSummary() {
   }
 }
 
+function clearSummary() {
+  diffState.diff = null;
+  diffState.selectedCommitId = null;
+  diffState.commitFileCache = {};
+  diffState.selectedCommitIds = [];
+  diffState.confirmed = false;
+  render();
+}
+
 function applySummary(diff) {
   diffState.diff = diff;
+  diffState.selectedCommitId = null;
+  diffState.commitFileCache = {};
+  diffState.selectedCommitIds = [];
   diffState.confirmed = false;
-  diffState.selectedFileIndex = -1;
-  diffState.patchCache = {};
+  document.getElementById('diffForcePushCheckbox').checked = false;
+  document.getElementById('diffForcePushCheckbox').disabled = !diff.allowForcePush;
   render();
 }
 
 function render() {
   renderMeta();
-  renderFileList();
-  renderPatch();
-  renderConfirmButton();
+  renderSelectedSummary();
+  renderCommitList();
+  renderCommitFiles();
+  renderActionButtons();
 }
 
 function renderMeta() {
@@ -138,9 +153,6 @@ function renderMeta() {
   }
   document.getElementById('diffPageSubtitle').textContent =
     `${diff.projectName} / ${diff.ruleName} / ${diff.sourceBranch} -> ${diff.targetBranch}`;
-  const commitItems = (diff.commits || []).map(item =>
-    `<li><code>${escapeHtml(item.id)}</code> ${escapeHtml(item.title)}</li>`
-  ).join('');
   document.getElementById('diffMeta').innerHTML = `
     <div class="diff-meta-item"><strong>Project</strong><span>${escapeHtml(diff.projectName || '-')}</span></div>
     <div class="diff-meta-item"><strong>Rule</strong><span>${escapeHtml(diff.ruleName || '-')}</span></div>
@@ -154,58 +166,84 @@ function renderMeta() {
     <div class="diff-meta-item"><strong>Cached At</strong><span>${escapeHtml(formatDateTime(diff.cachedAt))}</span></div>
     <div class="diff-meta-item diff-meta-wide"><strong>Target URL</strong><span>${escapeHtml(diff.targetRemoteUrl || '-')}</span></div>
     <div class="diff-meta-item diff-meta-wide"><strong>Cache Message</strong><span>${escapeHtml(diff.lastRefreshMessage || '-')}</span></div>
-    <div class="diff-meta-item diff-meta-wide"><strong>Commits</strong><ul class="diff-commit-list">${commitItems || '<li>(none)</li>'}</ul></div>
   `;
 }
 
-function renderFileList() {
-  const root = document.getElementById('diffFileList');
+function renderSelectedSummary() {
+  const summary = document.getElementById('selectedCommitSummary');
+  if (!diffState.selectedCommitIds.length) {
+    summary.textContent = '尚未選擇 commit';
+    return;
+  }
+  summary.textContent = `已選擇 ${diffState.selectedCommitIds.length} 筆 commit`;
+}
+
+function renderCommitList() {
+  const root = document.getElementById('diffCommitList');
   if (!diffState.diff) {
     root.innerHTML = '<div class="viewer empty">尚未載入差異快取</div>';
     return;
   }
-  const files = diffState.diff.files || [];
-  if (!files.length) {
-    root.innerHTML = '<div class="viewer empty">沒有檔案差異</div>';
+  const commits = diffState.diff.commits || [];
+  if (!commits.length) {
+    root.innerHTML = '<div class="viewer empty">目前沒有 ahead commit</div>';
     return;
   }
-  root.innerHTML = files.map((file, index) => `
-    <button type="button"
-      class="${index === diffState.selectedFileIndex ? 'diff-file-item active' : 'diff-file-item'}"
-      onclick="selectDiffFile(${index})">
+  root.innerHTML = commits.map(commit => {
+    const active = commit.id === diffState.selectedCommitId;
+    const checked = diffState.selectedCommitIds.includes(commit.id);
+    return `
+      <div class="${active ? 'diff-file-item active' : 'diff-file-item'}">
+        <label class="mini-check">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleCommitSelection('${escapeAttr(commit.id)}', this.checked)">
+          選取
+        </label>
+        <button type="button" class="secondary diff-commit-button" onclick="selectCommit('${escapeAttr(commit.id)}')">
+          <div class="stacked-copy">
+            <strong><code>${escapeHtml(commit.shortId || commit.id)}</code></strong>
+            <span>${escapeHtml(commit.title || '')}</span>
+            <span>${escapeHtml(commit.author || '-')} / ${escapeHtml(formatDateTime(commit.committedAt))}</span>
+          </div>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCommitFiles() {
+  const title = document.getElementById('diffFileTitle');
+  const root = document.getElementById('diffCommitFilesView');
+  if (!diffState.selectedCommitId) {
+    title.textContent = '請從左側選擇 commit';
+    root.innerHTML = '尚未載入 commit 檔案清單';
+    return;
+  }
+  const commit = (diffState.diff?.commits || []).find(item => item.id === diffState.selectedCommitId);
+  title.textContent = `${commit?.shortId || diffState.selectedCommitId} ${commit?.title || ''}`.trim();
+  const cached = diffState.commitFileCache[diffState.selectedCommitId];
+  if (!cached) {
+    root.innerHTML = '載入 commit 檔案清單中...';
+    return;
+  }
+  const files = cached.files || [];
+  if (!files.length) {
+    root.innerHTML = '<div class="empty">此 commit 沒有檔案異動</div>';
+    return;
+  }
+  root.innerHTML = files.map(file => `
+    <div class="diff-commit-file-row">
       <span class="diff-file-status ${statusClass(file.status)}">${escapeHtml(file.status)}</span>
       <span class="diff-file-path">${escapeHtml(file.displayPath || file.path)}</span>
-    </button>
+    </div>
   `).join('');
 }
 
-function renderPatch() {
-  const title = document.getElementById('diffFileTitle');
-  const root = document.getElementById('diffPatchView');
-  const files = diffState.diff?.files || [];
-  const selected = diffState.selectedFileIndex >= 0 ? files[diffState.selectedFileIndex] : null;
-  if (!selected) {
-    title.textContent = '請從左側選擇檔案';
-    root.textContent = diffState.diff ? '尚未載入檔案差異' : '尚未載入差異快取';
-    return;
-  }
-  title.textContent = selected.displayPath || selected.path;
-  const cachedPatch = diffState.patchCache[fileKey(selected)];
-  if (cachedPatch == null) {
-    root.textContent = '載入檔案差異中...';
-    return;
-  }
-  const lines = String(cachedPatch || '').replace(/\r/g, '').split('\n');
-  root.innerHTML = lines.map(line => {
-    const escaped = escapeHtml(line || ' ');
-    return `<div class="diff-line ${lineClass(line)}"><code>${escaped}</code></div>`;
-  }).join('') || '<div class="diff-line diff-line-context"><code>(empty diff)</code></div>';
-}
-
-function renderConfirmButton() {
-  const button = document.getElementById('confirmReviewButton');
-  button.textContent = diffState.confirmed ? '已完成人工確認' : '人工確認本次同步';
-  button.disabled = diffState.confirmed;
+function renderActionButtons() {
+  const confirmButton = document.getElementById('confirmReviewButton');
+  const pushButton = document.getElementById('pushSelectedCommitsButton');
+  confirmButton.textContent = diffState.confirmed ? '已完成人工確認' : '人工確認本次同步';
+  confirmButton.disabled = diffState.confirmed || !diffState.selectedCommitIds.length;
+  pushButton.disabled = !diffState.confirmed || !diffState.selectedCommitIds.length;
 }
 
 function statusClass(status) {
@@ -215,82 +253,97 @@ function statusClass(status) {
   return 'status-modify';
 }
 
-function lineClass(line) {
-  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') || line.startsWith('index ')) {
-    return 'diff-line-meta';
-  }
-  if (line.startsWith('@@')) {
-    return 'diff-line-hunk';
-  }
-  if (line.startsWith('+')) {
-    return 'diff-line-add';
-  }
-  if (line.startsWith('-')) {
-    return 'diff-line-remove';
-  }
-  return 'diff-line-context';
-}
-
-function fileKey(file) {
-  return `${file.oldPath || ''}=>${file.path || ''}`;
-}
-
-async function selectDiffFile(index) {
-  diffState.selectedFileIndex = index;
-  renderFileList();
-  renderPatch();
-  const file = diffState.diff?.files?.[index];
-  if (!file) {
-    return;
-  }
-  const key = fileKey(file);
-  if (Object.prototype.hasOwnProperty.call(diffState.patchCache, key)) {
+async function selectCommit(commitId) {
+  diffState.selectedCommitId = commitId;
+  renderCommitList();
+  renderCommitFiles();
+  if (Object.prototype.hasOwnProperty.call(diffState.commitFileCache, commitId)) {
     return;
   }
   try {
-    const data = await withLoading('載入檔案差異中...', () =>
-      api(`/api/rules/${diffState.ruleId}/diff-cache/file`, {
-        method: 'POST',
-        body: JSON.stringify({
-          path: file.path,
-          oldPath: file.oldPath,
-        }),
-      })
+    const data = await withLoading('載入 commit 檔案清單中...', () =>
+      api(`/api/rules/${diffState.ruleId}/diff/commits/${encodeURIComponent(commitId)}/files`)
     );
-    diffState.patchCache[key] = data.patch || '';
-    renderPatch();
+    diffState.commitFileCache[commitId] = data;
+    renderCommitFiles();
   } catch (error) {
-    diffState.patchCache[key] = `ERROR: ${error.message}`;
-    renderPatch();
+    diffState.commitFileCache[commitId] = { files: [], error: error.message };
+    document.getElementById('diffCommitFilesView').textContent = error.message;
     showToast(error.message, 'error');
   }
 }
 
+function toggleCommitSelection(commitId, checked) {
+  if (checked) {
+    if (!diffState.selectedCommitIds.includes(commitId)) {
+      diffState.selectedCommitIds.push(commitId);
+    }
+  } else {
+    diffState.selectedCommitIds = diffState.selectedCommitIds.filter(item => item !== commitId);
+  }
+  diffState.confirmed = false;
+  render();
+}
+
 function confirmReview() {
-  if (!diffState.ruleId) {
+  if (!diffState.ruleId || !diffState.selectedCommitIds.length) {
     return;
   }
   diffState.confirmed = true;
-  renderConfirmButton();
+  renderActionButtons();
   if (window.opener && !window.opener.closed) {
     window.opener.postMessage({
       type: 'diff-review-confirmed',
       ruleId: diffState.ruleId,
+      selectedCommitIds: [...diffState.selectedCommitIds],
     }, window.location.origin);
   }
-  showToast('已完成人工確認，主畫面可直接同步', 'success');
+  showToast('已完成人工確認，可直接推送已選 commit', 'success');
+}
+
+async function pushSelectedCommits() {
+  if (!diffState.ruleId || !diffState.selectedCommitIds.length || !diffState.confirmed) {
+    return;
+  }
+  try {
+    const forcePush = document.getElementById('diffForcePushCheckbox').checked;
+    const result = await withLoading('同步已選 commit 中...', () =>
+      api(`/api/rules/${diffState.ruleId}/sync`, {
+        method: 'POST',
+        body: JSON.stringify({
+          forcePush,
+          reviewConfirmed: true,
+          selectedCommitIds: diffState.selectedCommitIds,
+        }),
+      })
+    );
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({
+        type: 'diff-sync-completed',
+        ruleId: diffState.ruleId,
+        selectedCommitIds: [...diffState.selectedCommitIds],
+        logPath: result.logPath,
+        message: result.message || '同步成功',
+      }, window.location.origin);
+    }
+    showToast(result.message || '同步成功', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 document.getElementById('reloadDiffButton').addEventListener('click', refreshDiffSummary);
 document.getElementById('confirmReviewButton').addEventListener('click', confirmReview);
+document.getElementById('pushSelectedCommitsButton').addEventListener('click', pushSelectedCommits);
 
 const params = new URLSearchParams(window.location.search);
 diffState.ruleId = params.get('ruleId') || '';
 if (!diffState.ruleId) {
-  document.getElementById('diffPatchView').textContent = '缺少 ruleId';
+  document.getElementById('diffCommitFilesView').textContent = '缺少 ruleId';
   showToast('缺少 ruleId', 'error');
 } else {
   loadCachedSummary();
 }
 
-window.selectDiffFile = selectDiffFile;
+window.selectCommit = selectCommit;
+window.toggleCommitSelection = toggleCommitSelection;

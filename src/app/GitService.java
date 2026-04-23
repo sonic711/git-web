@@ -10,9 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 final class GitService {
     private static final String EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -65,7 +67,7 @@ final class GitService {
         String targetCommit = targetExists ? resolveRevision(repoPath, targetRef) : EMPTY_TREE_HASH;
         String range = targetExists ? targetRef + ".." + sourceRef : sourceRef;
         GitCommandResult commits = runChecked(repoPath,
-            List.of("git", "log", "--oneline", "--no-merges", range));
+            List.of("git", "log", "--reverse", "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s", "--no-merges", range));
         GitCommandResult files = runChecked(repoPath,
             targetExists
                 ? List.of("git", "diff", "--name-status", "--find-renames", targetRef, sourceRef)
@@ -74,10 +76,14 @@ final class GitService {
         List<Object> commitList = new ArrayList<>();
         String[] commitLines = commits.stdout.strip().isEmpty() ? new String[0] : commits.stdout.strip().split("\\R");
         for (String line : commitLines) {
-            int firstSpace = line.indexOf(' ');
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", firstSpace > 0 ? line.substring(0, firstSpace) : line);
-            item.put("title", firstSpace > 0 ? line.substring(firstSpace + 1) : "");
+            String[] parts = line.split("\\u001f", -1);
+            item.put("id", parts.length > 0 ? parts[0] : line);
+            item.put("shortId", parts.length > 1 ? parts[1] : line);
+            item.put("author", parts.length > 2 ? parts[2] : "");
+            item.put("committedAt", parts.length > 3 ? parts[3] : "");
+            item.put("title", parts.length > 4 ? parts[4] : "");
+            item.put("selectable", true);
             commitList.add(item);
         }
 
@@ -111,10 +117,44 @@ final class GitService {
         response.put("targetRepoName", rule.targetRepoName);
         response.put("targetRemoteName", remote.name);
         response.put("targetRemoteUrl", targetRemoteUrl(config, rule));
+        response.put("allowForcePush", rule.allowForcePush);
+        response.put("reviewRequired", rule.reviewRequired);
         response.put("compareBase", targetCommit);
         response.put("compareHead", sourceCommit);
         response.put("summary", summary);
         response.put("commits", commitList);
+        response.put("files", changedFileList);
+        return response;
+    }
+
+    Map<String, Object> commitFiles(AppConfig config, ProjectConfig project, String commitId) throws IOException, InterruptedException {
+        Path repoPath = project.localRepoPath(config);
+        Models.require(Files.exists(repoPath), "Local repository does not exist");
+        Models.require(isGitRepo(repoPath), "Local path is not a git repository");
+
+        GitCommandResult titleResult = runChecked(repoPath, List.of("git", "show", "-s", "--format=%s", commitId));
+        GitCommandResult files = runChecked(repoPath,
+            List.of("git", "diff-tree", "--root", "--no-commit-id", "--name-status", "-r", "--find-renames", commitId));
+
+        List<Object> changedFileList = new ArrayList<>();
+        String[] fileLines = files.stdout.strip().isEmpty() ? new String[0] : files.stdout.strip().split("\\R");
+        for (String line : fileLines) {
+            String[] parts = line.split("\\t");
+            String statusCode = parts.length > 0 ? parts[0] : "M";
+            String status = normalizeStatus(statusCode);
+            String oldPath = parts.length > 2 ? parts[1] : null;
+            String path = parts.length > 2 ? parts[2] : parts.length > 1 ? parts[1] : line;
+            Map<String, Object> fileItem = new LinkedHashMap<>();
+            fileItem.put("status", status);
+            fileItem.put("path", path);
+            fileItem.put("oldPath", oldPath);
+            fileItem.put("displayPath", oldPath != null ? oldPath + " -> " + path : path);
+            changedFileList.add(fileItem);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("commitId", commitId);
+        response.put("title", titleResult.stdout.strip());
         response.put("files", changedFileList);
         return response;
     }
@@ -165,7 +205,7 @@ final class GitService {
     }
 
     SyncResult sync(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush, boolean reviewConfirmed,
-                    String triggerSource)
+                    List<String> selectedCommitIds, String triggerSource)
         throws IOException, InterruptedException {
         Models.require(project.enabled, "Project is disabled");
         Models.require(rule.enabled, "Rule is disabled");
@@ -178,6 +218,10 @@ final class GitService {
         if (rule.reviewRequired) {
             Models.require(reviewConfirmed, "Review confirmation is required");
         }
+        List<String> requestedCommitIds = selectedCommitIds == null ? List.of() : selectedCommitIds;
+        if (rule.reviewRequired) {
+            Models.require(!requestedCommitIds.isEmpty(), "At least one commit must be selected for review-required sync");
+        }
 
         ensureRepoReady(config, project);
         ensureTargetRemote(config, project, rule);
@@ -186,18 +230,21 @@ final class GitService {
 
         List<GitCommandResult> results = new ArrayList<>();
         syncVendorBranch(config, project, rule, results);
-
-        List<String> pushCommand = new ArrayList<>();
-        pushCommand.add("git");
-        pushCommand.add("push");
-        if (forcePush) {
-            pushCommand.add("-f");
+        if (!requestedCommitIds.isEmpty()) {
+            syncSelectedCommits(repoPath, rule, internalRemote, forcePush, requestedCommitIds, results);
+        } else {
+            List<String> pushCommand = new ArrayList<>();
+            pushCommand.add("git");
+            pushCommand.add("push");
+            if (forcePush) {
+                pushCommand.add("-f");
+            }
+            pushCommand.add(internalRemote);
+            pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
+            results.add(runChecked(repoPath, pushCommand));
         }
-        pushCommand.add(internalRemote);
-        pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
-        results.add(runChecked(repoPath, pushCommand));
 
-        return new SyncResult(results);
+        return new SyncResult(results, requestedCommitIds);
     }
 
     private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
@@ -209,6 +256,45 @@ final class GitService {
         results.add(runChecked(repoPath, List.of("git", "checkout", "-B", rule.sourceBranch, "origin/" + rule.sourceBranch)));
         results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
         results.add(runChecked(repoPath, List.of("git", "pull", "--ff-only", "origin", rule.sourceBranch)));
+    }
+
+    private void syncSelectedCommits(Path repoPath, RuleConfig rule, String internalRemote, boolean forcePush,
+                                     List<String> selectedCommitIds, List<GitCommandResult> results)
+        throws IOException, InterruptedException {
+        results.add(runChecked(repoPath, List.of("git", "fetch", internalRemote, "--prune")));
+        String targetRef = internalRemote + "/" + rule.targetBranch;
+        Models.require(branchExists(repoPath, targetRef), "Commit-based sync requires an existing target branch");
+
+        List<String> orderedSelectedCommitIds = orderSelectedCommitIds(repoPath, targetRef, rule.sourceBranch, selectedCommitIds);
+        String tempBranch = "sync_review_" + rule.id + "_" + System.currentTimeMillis();
+        results.add(runChecked(repoPath, List.of("git", "checkout", "-B", tempBranch, targetRef)));
+
+        boolean cherryPickInProgress = false;
+        try {
+            for (String commitId : orderedSelectedCommitIds) {
+                cherryPickInProgress = true;
+                results.add(runChecked(repoPath, List.of("git", "cherry-pick", commitId)));
+                cherryPickInProgress = false;
+            }
+
+            List<String> pushCommand = new ArrayList<>();
+            pushCommand.add("git");
+            pushCommand.add("push");
+            if (forcePush) {
+                pushCommand.add("-f");
+            }
+            pushCommand.add(internalRemote);
+            pushCommand.add(tempBranch + ":refs/heads/" + rule.targetBranch);
+            results.add(runChecked(repoPath, pushCommand));
+        } catch (IOException | InterruptedException exception) {
+            if (cherryPickInProgress) {
+                runner.run(repoPath, List.of("git", "cherry-pick", "--abort"));
+            }
+            throw exception;
+        } finally {
+            runner.run(repoPath, List.of("git", "checkout", rule.sourceBranch));
+            runner.run(repoPath, List.of("git", "branch", "-D", tempBranch));
+        }
     }
 
     private void ensureRepoReady(AppConfig config, ProjectConfig project) throws IOException, InterruptedException {
@@ -258,6 +344,30 @@ final class GitService {
     private String resolveRevision(Path repoPath, String revision) throws IOException, InterruptedException {
         GitCommandResult result = runChecked(repoPath, List.of("git", "rev-parse", "--verify", revision));
         return result.stdout.strip();
+    }
+
+    private List<String> orderSelectedCommitIds(Path repoPath, String targetRef, String sourceBranch, List<String> selectedCommitIds)
+        throws IOException, InterruptedException {
+        GitCommandResult history = runChecked(repoPath,
+            List.of("git", "rev-list", "--reverse", "--no-merges", targetRef + ".." + sourceBranch));
+        List<String> sourceOrder = history.stdout.strip().isEmpty()
+            ? List.of()
+            : List.of(history.stdout.strip().split("\\R"));
+
+        Set<String> selected = new LinkedHashSet<>();
+        for (String commitId : selectedCommitIds) {
+            selected.add(resolveRevision(repoPath, commitId));
+        }
+        Models.require(!selected.isEmpty(), "At least one commit must be selected");
+
+        List<String> ordered = new ArrayList<>();
+        for (String commitId : sourceOrder) {
+            if (selected.contains(commitId)) {
+                ordered.add(commitId);
+            }
+        }
+        Models.require(ordered.size() == selected.size(), "Selected commits must belong to the current source branch diff range");
+        return ordered;
     }
 
     private SnapshotContent readRevisionFile(Path repoPath, String revision, String path) throws IOException, InterruptedException {
@@ -386,9 +496,11 @@ final class GitService {
 
     static final class SyncResult {
         final List<GitCommandResult> commandResults;
+        final List<String> selectedCommitIds;
 
-        SyncResult(List<GitCommandResult> commandResults) {
+        SyncResult(List<GitCommandResult> commandResults, List<String> selectedCommitIds) {
             this.commandResults = commandResults;
+            this.selectedCommitIds = selectedCommitIds;
         }
 
         String asLogText(String projectId, String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource) {
@@ -398,6 +510,7 @@ final class GitService {
             builder.append("triggerSource=").append(triggerSource).append('\n');
             builder.append("forcePush=").append(forcePush).append('\n');
             builder.append("reviewConfirmed=").append(reviewConfirmed).append('\n');
+            builder.append("selectedCommitIds=").append(selectedCommitIds).append('\n');
             for (GitCommandResult result : commandResults) {
                 builder.append("\n$ ").append(String.join(" ", result.command)).append('\n');
                 builder.append("exitCode=").append(result.exitCode).append('\n');

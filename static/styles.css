@@ -501,6 +501,11 @@ th {
   background: #f3e4d7;
 }
 
+.diff-commit-button {
+  width: 100%;
+  text-align: left;
+}
+
 .diff-file-status {
   display: inline-flex;
   align-items: center;
@@ -534,6 +539,20 @@ th {
 
 .diff-file-path {
   word-break: break-word;
+}
+
+.diff-toolbar {
+  margin-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diff-commit-file-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #efe4d3;
 }
 
 .diff-content {

@@ -120,7 +120,7 @@
 - 若 `allowForcePush=false`，UI 不得允許勾選 force push。
 - 若 `allowForcePush=true`，使用者可在執行前決定本次是否使用 `-f`。
 - 若 `manualOnly=true`，UI 不得顯示或啟用排程開關。
-- 若 `reviewRequired=true`，UI 必須先完成差異檢視與人工確認，才可執行同步。
+- 若 `reviewRequired=true`，UI 必須先完成 commit 檢視、挑選要同步的 commit 與人工確認，才可執行同步。
 - 使用者在 UI 修改規則後，系統必須立即寫回 `config/settings.json`。
 
 ## 同步流程
@@ -140,9 +140,10 @@
 11. 執行 `git pull --ff-only origin <sourceBranch>`。
 12. 以 `remote.baseUrl + mapping.targetRepoName` 組出完整目標 remote URL。
 13. 建立或更新目標 remote。
-14. 若 mapping 設定為 `reviewRequired=true`，先產出差異並等待人工確認。
-15. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
-16. 記錄結果並回傳 UI。
+14. 若 mapping 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
+15. 允許使用者挑選本次要同步的 commit。
+16. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
+17. 記錄結果並回傳 UI。
 
 ## Review Gate 流程
 
@@ -151,8 +152,9 @@
 1. mapping 設定 `manualOnly=true`
 2. mapping 設定 `reviewRequired=true`
 3. 使用者先點擊「查看差異」
-4. UI 顯示 commit list 或差異摘要
-5. 使用者勾選人工確認後才可執行同步
+4. UI 顯示 ahead commit 清單
+5. 使用者點選單一 commit 時，可看到該 commit 的異動檔案清單
+6. 使用者勾選要同步的 commit，並完成人工確認後才可執行同步
 
 ## Git 指令邏輯
 
@@ -238,7 +240,8 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 ```json
 {
   "forcePush": true,
-  "reviewConfirmed": true
+  "reviewConfirmed": true,
+  "selectedCommitIds": ["abc1234", "def5678"]
 }
 ```
 
@@ -270,8 +273,41 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
   "mappingId": "map-uat",
   "sourceBranch": "UAT",
   "targetBranch": "UAT",
-  "aheadCommits": 2,
-  "changedFiles": 6
+  "summary": {
+    "aheadCommits": 2,
+    "changedFiles": 6
+  },
+  "commits": [
+    {
+      "id": "abc1234",
+      "title": "Fix payment validation",
+      "author": "SeanLiu",
+      "committedAt": "2026-04-23T10:00:00+08:00",
+      "selectable": true
+    }
+  ]
+}
+```
+
+`GET /api/mappings/{id}/diff/commits/{commitId}/files`
+
+回應範例：
+
+```json
+{
+  "mappingId": "map-uat",
+  "commitId": "abc1234",
+  "title": "Fix payment validation",
+  "files": [
+    {
+      "status": "M",
+      "path": "src/payment/Validator.java"
+    },
+    {
+      "status": "A",
+      "path": "src/payment/ValidatorTest.java"
+    }
+  ]
 }
 ```
 
@@ -286,8 +322,9 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 5. 若本機目錄已存在，系統會直接 fetch 後同步。
 6. UI 可透過 checkbox 控制本次是否使用 `-f`。
 7. `UAT` 之類的規則可設定為 manual-only 且 review-required。
-8. 對 review-required 規則，UI 必須先提供差異檢視。
-9. UI 修改 remote、branch、排程與規則設定後，必須寫回主設定檔。
-10. UI 能顯示成功或失敗結果。
-11. 每次執行都會留下 log。
-12. 不依賴資料庫。
+8. 對 review-required 規則，UI 必須先提供 ahead commit 清單與單一 commit 的檔案清單檢視。
+9. 實際 patch 內容不在本階段提供，列為後續功能。
+10. UI 修改 remote、branch、排程與規則設定後，必須寫回主設定檔。
+11. UI 能顯示成功或失敗結果。
+12. 每次執行都會留下 log。
+13. 不依賴資料庫。

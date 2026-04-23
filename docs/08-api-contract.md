@@ -183,6 +183,7 @@
 用途：
 
 - 取得來源與目標分支差異摘要
+- 回傳目前 ahead commit 清單
 - `reviewRequired=true` 的 mapping，UI 應先呼叫此 API
 - 後端需回傳由 `baseUrl + targetRepoName` 組成的完整目標 URL
 
@@ -203,13 +204,43 @@
   "commits": [
     {
       "id": "abc1234",
-      "title": "Fix payment validation"
+      "title": "Fix payment validation",
+      "author": "SeanLiu",
+      "committedAt": "2026-04-23T10:00:00+08:00",
+      "selectable": true
     }
   ],
+  "files": []
+}
+```
+
+說明：
+
+- `files` 在此 API 中只作為整體摘要欄位，可為空
+- 單一 commit 的異動檔案清單由下方 API 取得
+- 本階段不提供實際檔案 diff 內容
+
+### `GET /api/mappings/{id}/diff/commits/{commitId}/files`
+
+用途：
+
+- 取得指定 commit 的異動檔案清單
+
+回應範例：
+
+```json
+{
+  "mappingId": "map-uat",
+  "commitId": "abc1234",
+  "title": "Fix payment validation",
   "files": [
     {
       "status": "M",
       "path": "src/payment/Validator.java"
+    },
+    {
+      "status": "A",
+      "path": "src/payment/ValidatorTest.java"
     }
   ]
 }
@@ -228,7 +259,8 @@
 ```json
 {
   "forcePush": true,
-  "reviewConfirmed": true
+  "reviewConfirmed": true,
+  "selectedCommitIds": ["abc1234", "def5678"]
 }
 ```
 
@@ -237,6 +269,8 @@
 1. 若 `allowForcePush=false`，不得接受 `forcePush=true`
 2. 若 `reviewRequired=true`，不得接受 `reviewConfirmed=false`
 3. 若同步來源為排程，後端不得對 `manualOnly=true` 的 mapping 執行
+4. 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支 branch 全量 push
+5. `selectedCommitIds` 應依來源 branch 歷史順序傳入
 
 回應範例：
 

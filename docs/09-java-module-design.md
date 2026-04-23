@@ -66,6 +66,7 @@
 
 - 產生來源與目標 branch 差異摘要
 - 取得 commit list
+- 取得單一 commit 的異動檔案清單
 - 回傳 UI 可顯示的摘要資料
 
 ### `SyncService`
@@ -73,6 +74,7 @@
 職責：
 
 - 執行單筆 mapping 同步
+- 支援整支 branch 同步與 commit-based 同步兩種模式
 - 驗證 `allowForcePush`
 - 驗證 `manualOnly`
 - 驗證 `reviewRequired`
@@ -113,6 +115,7 @@
 - `PUT /api/mappings/{id}`
 - `POST /api/mappings/{id}/validate`
 - `POST /api/mappings/{id}/diff`
+- `GET /api/mappings/{id}/diff/commits/{commitId}/files`
 - `POST /api/mappings/{id}/sync`
 
 ### `ScheduleController`
