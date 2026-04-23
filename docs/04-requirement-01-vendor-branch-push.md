@@ -21,11 +21,11 @@
 - 若本機指定目錄沒有 repo，系統需先 clone。
 - 若本機指定目錄已有 repo，系統需直接使用並更新。
 - UI 用 `checkbox` 控制本次同步是否執行 `git push -f`。
-- 每次只允許執行一筆 mapping。
+- 每次只允許執行一筆 rule。
 - 本機已安裝 `git`，由 `Java 17` 呼叫執行。
 - 來源與目標分支通常同名，系統應支援同名分支為預設模式。
-- 某些 mapping 可設定為僅允許手動同步。
-- 某些 mapping 可設定為同步前必須先檢視差異並人工確認。
+- 某些 rule 可設定為僅允許手動同步。
+- 某些 rule 可設定為同步前必須先檢視差異並人工確認。
 - 使用者可在 UI 上修改 remote、branch、排程與同步規則，且修改結果必須寫回主設定檔。
 
 ## 功能拆解
@@ -100,7 +100,7 @@
 
 使用者必須可查看：
 
-- 所有 mapping 規則
+- 所有 project / rule 設定
 - 廠商 repo URL
 - 本機目錄
 - 來源 branch
@@ -127,9 +127,9 @@
 
 當使用者點擊「同步」時，系統應依序執行：
 
-1. 讀取 mapping 設定。
+1. 讀取 project 與 rule 設定。
 2. 讀取對應 remote 設定。
-3. 驗證 mapping 為啟用狀態。
+3. 驗證 project 與 rule 為啟用狀態。
 4. 檢查實際 repo 路徑是否存在。
 5. 若不存在，從 `vendorRepoUrl` clone。
 6. 若存在，驗證該目錄是有效 Git repo。
@@ -138,9 +138,9 @@
 9. 驗證 `origin/<sourceBranch>` 存在。
 10. 將本地 `sourceBranch` 強制對齊 `origin/<sourceBranch>`，避免廠商 force push 後本地歷程偏移。
 11. 執行 `git pull --ff-only origin <sourceBranch>`。
-12. 以 `remote.baseUrl + mapping.targetRepoName` 組出完整目標 remote URL。
+12. 以 `remote.baseUrl + rule.targetRepoName` 組出完整目標 remote URL。
 13. 建立或更新目標 remote。
-14. 若 mapping 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
+14. 若 rule 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
 15. 允許使用者挑選本次要同步的 commit。
 16. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
 17. 記錄結果並回傳 UI。
@@ -149,8 +149,8 @@
 
 對於例如 `UAT -> UAT` 這類需要人工檢視的規則，系統應支援：
 
-1. mapping 設定 `manualOnly=true`
-2. mapping 設定 `reviewRequired=true`
+1. rule 設定 `manualOnly=true`
+2. rule 設定 `reviewRequired=true`
 3. 使用者先點擊「查看差異」
 4. UI 顯示 ahead commit 清單
 5. 使用者點選單一 commit 時，可看到該 commit 的異動檔案清單
@@ -186,10 +186,10 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 5. `targetRemoteId` 必須存在。
 6. `targetRepoName` 不可為空，且第一版要求以 `.git` 結尾。
 7. `targetBranch` 不可為空。
-8. mapping 必須為啟用狀態。
+8. rule 必須為啟用狀態。
 9. 若本機目錄已存在，必須是有效 Git repo。
 10. 若本機目錄已存在，repo 來源必須與 `vendorRepoUrl` 相符。
-11. 若 `forcePush=true`，mapping 必須允許 force push。
+11. 若 `forcePush=true`，rule 必須允許 force push。
 12. 若 `manualOnly=true`，不得由排程觸發。
 13. 若 `reviewRequired=true`，同步請求必須附帶人工確認狀態。
 
@@ -213,13 +213,14 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 
 ## 驗證 API
 
-`POST /api/mappings/{id}/validate`
+`POST /api/rules/{ruleId}/validate`
 
 回應範例：
 
 ```json
 {
-  "mappingId": "map-sit",
+  "projectId": "fsap-adm",
+  "ruleId": "rule-sit",
   "ok": true,
   "checks": [
     { "key": "mapping_enabled", "ok": true },
@@ -233,7 +234,7 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 
 ## 同步 API
 
-`POST /api/mappings/{id}/sync`
+`POST /api/rules/{ruleId}/sync`
 
 請求範例：
 
@@ -250,7 +251,8 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 ```json
 {
   "runId": "20260420T184500-map-sit",
-  "mappingId": "map-sit",
+  "projectId": "fsap-adm",
+  "ruleId": "rule-sit",
   "status": "success",
   "sourceBranch": "SIT",
   "targetRemoteId": "targetA",
@@ -264,13 +266,14 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 
 ## 差異檢視 API
 
-`POST /api/mappings/{id}/diff`
+`POST /api/rules/{ruleId}/diff`
 
 回應範例：
 
 ```json
 {
-  "mappingId": "map-uat",
+  "projectId": "fsap-adm",
+  "ruleId": "rule-uat",
   "sourceBranch": "UAT",
   "targetBranch": "UAT",
   "summary": {
@@ -289,13 +292,12 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 }
 ```
 
-`GET /api/mappings/{id}/diff/commits/{commitId}/files`
+`GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
 
 回應範例：
 
 ```json
 {
-  "mappingId": "map-uat",
   "commitId": "abc1234",
   "title": "Fix payment validation",
   "files": [
@@ -315,7 +317,7 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 
 此需求完成時，至少應滿足：
 
-1. 可建立兩筆以上 mapping 規則。
+1. 可建立兩筆以上 rule。
 2. 可執行 `SIT -> targetA/SIT`。
 3. 可執行 `SIT2 -> targetB/SIT2`。
 4. 若本機目錄不存在，系統會先 clone。

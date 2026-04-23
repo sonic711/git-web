@@ -42,7 +42,7 @@
 
 若未來部署到共用機器，需再定義：
 
-- 同一筆 mapping 是否允許重複觸發
+- 同一筆 rule 是否允許重複觸發
 - 是否要加檔案鎖或程序鎖
 - 執行中 UI 是否要禁止再次點擊同步
 
@@ -56,7 +56,7 @@
 
 ## 7. Review Gate 顯示深度
 
-目前正式規格已要求 review-required mapping 先看差異再同步，但尚未定義：
+目前正式規格已要求 review-required rule 先看差異再同步，但尚未定義：
 
 - commit-based push 是否限制為連續 commit
 - 是否要支援多選非連續 commit

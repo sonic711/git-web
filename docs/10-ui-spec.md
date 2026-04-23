@@ -111,10 +111,10 @@
 
 互動規則：
 
-1. Remote ID 建立後不可輕易變更，避免 mapping 關聯失效
+1. Remote ID 建立後不可輕易變更，避免 rule 關聯失效
 2. 可由使用者自訂頁籤，例如 `SIT`、`UAT`
 3. Base URL 只保存共用倉庫路徑，不含最後專案名稱
-4. Mapping 建立時只需補上最後的 `project.git`
+4. Rule 建立時只需補上最後的 `project.git`
 5. 列表需支援刪除 remote
 6. 儲存成功後必須寫回 `config/settings.json`
 
@@ -122,7 +122,7 @@
 
 用途：
 
-- 查看所有 mapping 的排程資訊
+- 查看所有 rule 的排程資訊
 - 快速調整是否自動同步
 
 欄位：
@@ -144,7 +144,7 @@
 
 用途：
 
-- 顯示 review-required mapping 的 ahead commit 清單
+- 顯示 review-required rule 的 ahead commit 清單
 - 顯示單一 commit 的異動檔案清單
 - 讓使用者以挑選 commit 的方式執行同步
 
@@ -198,14 +198,16 @@
 
 ### 載入列表頁
 
-1. 呼叫 `GET /api/mappings`
-2. 呼叫 `GET /api/schedules`
-3. 合併畫面狀態
+1. 呼叫 `GET /api/system/config`
+2. 呼叫 `GET /api/remotes`
+3. 呼叫 `GET /api/projects`
+4. 呼叫 `GET /api/schedules`
+5. 合併畫面狀態
 
 ### 修改規則
 
-1. 使用者編輯欄位
-2. 送出 `PUT /api/mappings/{id}`
+1. 使用者在指定專案下編輯 rule 欄位
+2. 送出 `PUT /api/projects/{projectId}/rules/{ruleId}`
 3. 成功後刷新列表
 4. UI 顯示成功或失敗訊息
 
@@ -213,7 +215,7 @@
 
 1. 使用者編輯 remote
 2. 送出 `PUT /api/remotes/{id}`
-3. 成功後刷新 mapping 下拉選單與 remote tabs
+3. 成功後刷新 rule 編輯下拉選單與 remote tabs
 4. UI 顯示成功或失敗訊息
 
 ### 選擇本機目錄
@@ -225,20 +227,21 @@
 
 ### 查看差異並同步
 
-1. 呼叫 `POST /api/mappings/{id}/diff`
-2. 顯示 ahead commit 清單
-3. 使用者點擊 commit，UI 呼叫 `GET /api/mappings/{id}/diff/commits/{commitId}/files`
-4. 顯示該 commit 的異動檔案清單
-5. 使用者勾選要同步的 commit
-6. 使用者人工確認
-7. 呼叫 `POST /api/mappings/{id}/sync`
-8. request body 帶入 `selectedCommitIds`
+1. 呼叫 `GET /api/rules/{ruleId}/diff-cache`
+2. 若沒有快取或使用者要求刷新，呼叫 `POST /api/rules/{ruleId}/diff-cache/refresh`
+3. 顯示 ahead commit 清單
+4. 使用者點擊 commit，UI 呼叫 `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
+5. 顯示該 commit 的異動檔案清單
+6. 使用者勾選要同步的 commit
+7. 使用者人工確認
+8. 呼叫 `POST /api/rules/{ruleId}/sync`
+9. request body 帶入 `selectedCommitIds`
 
 ### 刪除
 
 1. 使用者點擊刪除按鈕
 2. UI 顯示確認視窗
-3. 送出 `DELETE /api/mappings/{id}` 或 `DELETE /api/remotes/{id}`
+3. 送出 `DELETE /api/projects/{projectId}`、`DELETE /api/projects/{projectId}/rules/{ruleId}` 或 `DELETE /api/remotes/{id}`
 4. 成功後刷新列表並顯示成功訊息
 
 ## 第一版 UI 優先順序

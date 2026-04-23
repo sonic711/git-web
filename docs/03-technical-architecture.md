@@ -54,7 +54,7 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 
 職責：
 
-- 顯示 mapping 規則
+- 顯示專案與其底下的規則
 - 提供新增 / 編輯設定頁
 - 提供排程設定頁
 - 提供 remote 設定頁
@@ -79,7 +79,7 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 - 執行 `git clone`、`git fetch`、`git remote add/set-url`、`git push`
 - 背景輪詢排程並觸發同步
 - 產生來源與目標之間的差異摘要
-- 驗證 review-required mapping 的人工確認狀態
+- 驗證 review-required rule 的人工確認狀態
 - 將 shell 執行結果轉為結構化 JSON
 - 寫入執行 log
 
@@ -101,34 +101,43 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 ```json
 {
   "version": 1,
+  "updatedAt": "2026-04-23T18:00:00+08:00",
+  "localWorkspaceRoot": "D:/git-workspace",
   "remotes": [
     {
-      "id": "targetA",
+      "id": "target-sit",
       "name": "SIT",
-      "baseUrl": "git@target.example.com:team/"
+      "baseUrl": "ssh://git@example.com:222/team/",
+      "enabled": true
     }
   ],
-  "mappings": [
+  "projects": [
     {
-      "id": "map-sit",
-      "name": "Vendor SIT to Target A SIT",
-      "vendorRepoUrl": "https://vendor.example.com/project.git",
-      "localWorkspaceRoot": "D:/git-workspace",
-      "localProjectName": "vendor-project",
-      "sourceBranch": "SIT",
-      "targetRemoteId": "targetA",
-      "targetRepoName": "project-a.git",
-      "targetBranch": "SIT",
-      "sameBranchNameExpected": true,
+      "id": "fsap-adm",
+      "name": "fsap-adm",
+      "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+      "localProjectName": "fsap-adm",
       "enabled": true,
-      "allowForcePush": true,
-      "manualOnly": false,
-      "reviewRequired": false,
-      "schedule": {
-        "enabled": true,
-        "type": "fixed-interval",
-        "intervalMinutes": 30
-      }
+      "rules": [
+        {
+          "id": "rule-sit",
+          "name": "SIT -> SIT",
+          "sourceBranch": "sit",
+          "targetRemoteId": "target-sit",
+          "targetRepoName": "fsap-adm.git",
+          "targetBranch": "sit",
+          "sameBranchNameExpected": true,
+          "enabled": true,
+          "allowForcePush": true,
+          "manualOnly": false,
+          "reviewRequired": false,
+          "schedule": {
+            "enabled": true,
+            "type": "fixed-interval",
+            "intervalMinutes": 30
+          }
+        }
+      ]
     }
   ]
 }
@@ -136,17 +145,18 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 
 欄位說明：
 
-- `version`：設定檔版本
+- `localWorkspaceRoot`：全局本地主目錄
 - `remotes`：目標 remote 清單
-- `mappings`：同步規則清單
+- `projects`：專案清單
+- `projects[*].rules`：該專案底下的同步規則
 - `remotes[*].name`：Remote 頁籤名稱
 - `remotes[*].baseUrl`：Remote 的 SSH base URL
-- `mappings[*].targetRepoName`：實際專案名稱，例如 `project-a.git`
+- `rules[*].targetRepoName`：實際專案名稱，例如 `fsap-adm.git`
 - `sameBranchNameExpected`：是否預期來源與目標分支同名，UI 可據此自動帶入預設值
 - `manualOnly`：是否僅允許手動同步
-- `reviewRequired`：是否要求同步前先看差異並人工確認
+- `reviewRequired`：是否要求同步前先做 commit-based review 並人工確認
 - `schedule.enabled`：是否啟用此規則的排程
-- `schedule.type`：排程型別，第一版建議固定為 `fixed-interval`
+- `schedule.type`：排程型別，第一版固定為 `fixed-interval`
 - `schedule.intervalMinutes`：排程間隔分鐘數
 
 規則限制：
@@ -161,11 +171,14 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 ```json
 {
   "mappingStates": {
-    "map-sit": {
-      "lastRunAt": "2026-04-20T19:30:00+08:00",
+    "rule-sit": {
+      "lastRunAt": "2026-04-23T18:10:00+08:00",
       "lastStatus": "success",
-      "nextRunAt": "2026-04-20T20:00:00+08:00",
-      "running": false
+      "lastRunSource": "manual",
+      "nextRunAt": "2026-04-23T18:40:00+08:00",
+      "running": false,
+      "lastLogPath": "2026-04-23.log",
+      "lastMessage": "Sync completed"
     }
   }
 }
@@ -189,19 +202,27 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 
 建議 API：
 
+- `GET /api/system/config`
+- `PUT /api/system/config`
+- `POST /api/system/select-directory`
 - `GET /api/remotes`
 - `POST /api/remotes`
 - `PUT /api/remotes/{id}`
-- `POST /api/system/select-directory`
-- `GET /api/mappings`
-- `POST /api/mappings`
-- `PUT /api/mappings/{id}`
+- `DELETE /api/remotes/{id}`
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/{projectId}`
+- `DELETE /api/projects/{projectId}`
+- `PUT /api/projects/{projectId}/rules/{ruleId}`
+- `DELETE /api/projects/{projectId}/rules/{ruleId}`
 - `GET /api/schedules`
-- `PUT /api/mappings/{id}/schedule`
-- `POST /api/mappings/{id}/diff`
-- `GET /api/mappings/{id}/diff/commits/{commitId}/files`
-- `POST /api/mappings/{id}/validate`
-- `POST /api/mappings/{id}/sync`
+- `POST /api/rules/{ruleId}/validate`
+- `POST /api/rules/{ruleId}/diff`
+- `GET /api/rules/{ruleId}/diff-cache`
+- `POST /api/rules/{ruleId}/diff-cache/refresh`
+- `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
+- `PUT /api/rules/{ruleId}/schedule`
+- `POST /api/rules/{ruleId}/sync`
 - `GET /api/logs/{logId}`
 
 設定維護要求：
@@ -210,7 +231,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - 設定寫回成功後，後端必須重新載入 in-memory 規則與排程
 - 匯出的主設定檔不得依賴 `state/runtime-state.json`
 
-## `POST /api/mappings/{id}/sync`
+## `POST /api/rules/{ruleId}/sync`
 
 請求體建議：
 
@@ -230,13 +251,14 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支來源 branch 的全量 push
 - `selectedCommitIds` 應依來源 branch 的歷史順序傳入
 
-## `POST /api/mappings/{id}/diff`
+## `POST /api/rules/{ruleId}/diff`
 
 回應體建議：
 
 ```json
 {
-  "mappingId": "map-uat",
+  "projectId": "fsap-adm",
+  "ruleId": "rule-uat",
   "sourceBranch": "UAT",
   "targetBranch": "UAT",
   "summary": {
@@ -261,13 +283,12 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - UI 應以 commit 清單作為 review 與選擇同步內容的主軸
 - 本階段不提供實際 patch 內容
 
-## `GET /api/mappings/{id}/diff/commits/{commitId}/files`
+## `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
 
 回應體建議：
 
 ```json
 {
-  "mappingId": "map-uat",
   "commitId": "abc1234",
   "title": "Fix payment validation",
   "files": [
@@ -304,9 +325,9 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 Java 服務需內建背景排程器：
 
 1. 啟動時讀取 `config/settings.json` 與 `state/runtime-state.json`。
-2. 以固定頻率檢查哪些 mapping 已到達執行時間。
-3. 跳過 `manualOnly=true` 或 `schedule.enabled=false` 的 mapping。
-4. 逐筆觸發同步，不可併發執行同一筆 mapping。
+2. 以固定頻率檢查哪些 rule 已到達執行時間。
+3. 跳過 `manualOnly=true` 或 `schedule.enabled=false` 的 rule。
+4. 逐筆觸發同步，不可併發執行同一筆 rule。
 5. 執行完成後回寫 `lastRunAt`、`lastStatus`、`nextRunAt`。
 6. 每次排程執行都必須寫入 log。
 
@@ -314,12 +335,12 @@ Java 服務需內建背景排程器：
 
 系統內部為目標 remote 產生固定名稱：
 
-- `sync_target_<mappingId>`
+- `sync_target_<ruleId>`
 
 例如：
 
-- `sync_target_map-sit`
-- `sync_target_map-uat`
+- `sync_target_rule-sit`
+- `sync_target_rule-uat`
 
 這可避免與 repo 原有 remote 名稱衝突。
 
@@ -338,9 +359,9 @@ Java 服務需內建背景排程器：
 
 - 單機部署
 - 單人使用優先
-- 手動執行單筆 mapping
-- 背景排程執行多筆 mapping
-- 特定 mapping 可設定為 manual-only 與 review-required
+- 手動執行單筆 rule
+- 背景排程執行多筆 rule
+- 特定 rule 可設定為 manual-only 與 review-required
 - 廠商來源為 `HTTPS`
 - 目標 remote 為 `SSH`
 - 單一 JSON 主設定檔

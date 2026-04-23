@@ -2,7 +2,7 @@
 
 ## 角色
 
-- 使用者：設定 repo、branch、remote 與 mapping，並手動執行同步。
+- 使用者：設定 repo、branch、remote、project 與 rule，並手動執行同步。
 - 系統：檢查 repo 狀態、執行 Git、回傳結果、寫入 log。
 
 ## 主要使用情境
@@ -45,7 +45,7 @@
 
 ## 情境 4：一次只執行一筆規則
 
-第一版主畫面只允許使用者一次執行一筆 mapping，避免：
+第一版主畫面只允許使用者一次執行一筆 rule，避免：
 
 - 多筆同步互相干擾
 - 錯誤訊息難以對應
@@ -55,16 +55,16 @@
 
 使用者希望把既有規則交給另一位同事使用時，系統應支援：
 
-1. 以單一主設定檔保存 remotes、mappings 與排程設定。
+1. 以單一主設定檔保存全局主目錄、remotes、projects、rules 與排程設定。
 2. 同事只需複製設定檔到指定目錄即可載入。
 3. 本機執行狀態與 log 不應影響主設定檔的可攜性。
 
 ## 情境 6：排程自動同步多個專案
 
-使用者設定多筆 mapping 與各自排程後，系統應可：
+使用者設定多個專案與多筆 rule 排程後，系統應可：
 
 1. 在背景定時檢查可執行的排程。
-2. 逐筆觸發對應 mapping 的同步。
+2. 逐筆觸發對應 rule 的同步。
 3. 為每次排程執行留下 log 與結果。
 4. 避免同一筆排程在尚未完成時重複啟動。
 
@@ -77,7 +77,7 @@
 3. 同步前先查看來源與目標的差異。
 4. 人工確認後才可執行同步。
 
-系統應支援將 mapping 標記為：
+系統應支援將 rule 標記為：
 
 - `manualOnly=true`
 - `reviewRequired=true`
@@ -102,7 +102,7 @@
 
 ## 單筆同步標準流程
 
-1. 使用者在列表頁選擇一筆 mapping。
+1. 使用者在列表頁選擇一筆 rule。
 2. 使用者決定本次是否勾選 `Force Push`。
 3. UI 呼叫本機 Java API。
 4. Java API 載入設定檔。
@@ -113,12 +113,12 @@
 9. 將本地來源分支對齊 `origin/<sourceBranch>`，並執行 `git pull --ff-only origin <sourceBranch>`。
 10. 建立或更新目標 remote。
 11. 依 checkbox 狀態決定一般 push 或 `push -f`。
-12. 若 mapping 啟用 review gate，先檢查是否已完成人工確認。
+12. 若 rule 啟用 review gate，先檢查是否已完成人工確認。
 13. 寫入 log 並回傳結果。
 
 ## Review Gate 流程
 
-1. 使用者在列表頁選擇一筆 `reviewRequired=true` 的 mapping。
+1. 使用者在列表頁選擇一筆 `reviewRequired=true` 的 rule。
 2. UI 先呼叫 diff API 取得來源與目標差異。
 3. UI 顯示目前 ahead commit 清單。
 4. 使用者點擊單一 commit，可查看該 commit 的異動檔案清單。

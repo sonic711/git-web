@@ -27,14 +27,15 @@
 
 - `AppConfig`
 - `RemoteConfig`
-- `MappingConfig`
+- `ProjectConfig`
+- `RuleConfig`
 
 ### `RuntimeStateService`
 
 職責：
 
 - 讀取 `state/runtime-state.json`
-- 更新 mapping 執行狀態
+- 更新 rule 執行狀態
 - 保存 `lastRunAt`、`lastStatus`、`nextRunAt`
 
 ### `GitCommandRunner`
@@ -73,7 +74,7 @@
 
 職責：
 
-- 執行單筆 mapping 同步
+- 執行單筆 rule 同步
 - 支援整支 branch 同步與 commit-based 同步兩種模式
 - 驗證 `allowForcePush`
 - 驗證 `manualOnly`
@@ -89,7 +90,7 @@
 - 啟動背景排程器
 - 根據 `config/settings.json` 決定下次執行時間
 - 跳過 `manualOnly=true` 規則
-- 避免同一 mapping 重複執行
+- 避免同一 rule 重複執行
 
 ### `LogService`
 
@@ -108,20 +109,28 @@
 - `POST /api/remotes`
 - `PUT /api/remotes/{id}`
 
-### `MappingController`
+### `ProjectController`
 
-- `GET /api/mappings`
-- `POST /api/mappings`
-- `PUT /api/mappings/{id}`
-- `POST /api/mappings/{id}/validate`
-- `POST /api/mappings/{id}/diff`
-- `GET /api/mappings/{id}/diff/commits/{commitId}/files`
-- `POST /api/mappings/{id}/sync`
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/{projectId}`
+- `DELETE /api/projects/{projectId}`
+- `PUT /api/projects/{projectId}/rules/{ruleId}`
+- `DELETE /api/projects/{projectId}/rules/{ruleId}`
+
+### `RuleController`
+
+- `POST /api/rules/{ruleId}/validate`
+- `POST /api/rules/{ruleId}/diff`
+- `GET /api/rules/{ruleId}/diff-cache`
+- `POST /api/rules/{ruleId}/diff-cache/refresh`
+- `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
+- `POST /api/rules/{ruleId}/sync`
+- `PUT /api/rules/{ruleId}/schedule`
 
 ### `ScheduleController`
 
 - `GET /api/schedules`
-- `PUT /api/mappings/{id}/schedule`
 
 ### `LogController`
 
@@ -133,8 +142,9 @@
 
 - `int version`
 - `OffsetDateTime updatedAt`
+- `String localWorkspaceRoot`
 - `List<RemoteConfig> remotes`
-- `List<MappingConfig> mappings`
+- `List<ProjectConfig> projects`
 
 ### `RemoteConfig`
 
@@ -143,13 +153,19 @@
 - `String baseUrl`
 - `boolean enabled`
 
-### `MappingConfig`
+### `ProjectConfig`
 
 - `String id`
 - `String name`
 - `String vendorRepoUrl`
-- `Path localWorkspaceRoot`
 - `String localProjectName`
+- `boolean enabled`
+- `List<RuleConfig> rules`
+
+### `RuleConfig`
+
+- `String id`
+- `String name`
 - `String sourceBranch`
 - `String targetRemoteId`
 - `String targetRepoName`
@@ -167,7 +183,7 @@
 - `String type`
 - `int intervalMinutes`
 
-### `MappingRuntimeState`
+### `RuleRuntimeState`
 
 - `OffsetDateTime lastRunAt`
 - `String lastStatus`
@@ -176,6 +192,7 @@
 - `boolean running`
 - `String lastLogPath`
   保存每日 log 檔名，例如 `2026-04-20.log`
+- `String lastMessage`
 
 ## 開發順序建議
 

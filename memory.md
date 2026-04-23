@@ -12,7 +12,7 @@
 
 - 已開始實作 MVP。
 - 已完成正式規格文件整理。
-- 已確認需求 01：手動同步單筆 mapping。
+- 已確認需求 01：手動同步單筆 rule。
 - 已確認需求 02：多專案定時推送。
 
 ## 已確認決策
@@ -28,13 +28,13 @@
 - 若本機目錄沒有 repo，需先 `clone`。
 - 若本機目錄已有 repo，需直接 `fetch` 後同步。
 - UI 使用 `checkbox` 控制本次是否 `git push -f`。
-- 手動同步一次只執行一筆 mapping。
+- 手動同步一次只執行一筆 rule。
 - 設定需以可攜式設定檔保存，方便複製給其他人使用。
 - 主設定檔與本機執行狀態檔分離保存。
 - 系統需支援多專案定時推送。
 - 來源與目標分支通常同名，系統需支援同名分支為預設模式。
-- 某些 mapping 需標記為 `manualOnly=true`，不得自動排程。
-- 某些 mapping 需標記為 `reviewRequired=true`，同步前需先看 ahead commit 並人工確認。
+- 某些 rule 需標記為 `manualOnly=true`，不得自動排程。
+- 某些 rule 需標記為 `reviewRequired=true`，同步前需先看 ahead commit 並人工確認。
 - UI 必須可隨時修改 remote、branch、是否自動同步等設定，並寫回 `config/settings.json`。
 - 本機目錄應可由 UI 直接選資料夾，不以手打路徑為主要方式。
 - Mappings 列表需提供行內 `Force Push` 與 `自動同步` 勾選。
@@ -43,7 +43,7 @@
 - 新增與編輯 Mapping / Remote 必須使用 popup modal，不佔主畫面中央區域。
 - 需支援 Windows 啟動腳本，至少提供 `run.bat` 與 `run.ps1`。
 - 本地工作目錄已改成全局 `localWorkspaceRoot` + 各專案 `localProjectName`，不再由專案各自保存主目錄。
-- 同一本地專案可對應多筆 mapping，且每筆 mapping 使用獨立內部 remote 名稱。
+- 同一本地專案可對應多筆 rule，且每筆 rule 使用獨立內部 remote 名稱。
 - 同步前需先將本地 `sourceBranch` 強制對齊廠商 `origin/<sourceBranch>`，再執行 `git pull --ff-only`。
 - 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
@@ -83,13 +83,14 @@
 主設定檔保存：
 
 - remotes
-- mappings
+- projects
+- rules
 - schedule
 - manualOnly
 - reviewRequired
 - sameBranchNameExpected
 - remote baseUrl
-- mapping targetRepoName
+- rule targetRepoName
 
 本機執行狀態檔保存：
 
@@ -148,7 +149,7 @@
 - 新增與編輯 Mapping / Remote 改為 popup modal，主畫面聚焦在推送列表。
 - 補上 Windows 啟動腳本 `run.bat` 與 `run.ps1`。
 - 將本地 repo 設定改為「主目錄 + 專案資料夾名稱」模式，並保留舊 `localRepoPath` 相容轉換。
-- 同一本地 repo 新增執行鎖，避免多筆 mapping 同時操作互相干擾。
+- 同一本地 repo 新增執行鎖，避免多筆 rule 同時操作互相干擾。
 - 同步流程改為先對齊 vendor branch，再 pull，再 push，避免廠商 force push 造成歷程偏移。
 - 前端新增全畫面 loading overlay，覆蓋所有主要按鈕操作。
 - UI 改為專案視角：先建立專案，再在專案底下建立多條同步規則。
@@ -158,8 +159,8 @@
 - 將本地主目錄從專案層級改成全局設定，專案只保留 `localProjectName`，並保留舊設定檔的相容轉換。
 - 前端時間顯示改為 `YYYY-MM-DD HH:mm:ss`，最後結果欄位已補上最後執行時間。
 - `LogService` 已改成只保留一天內的 log，啟動與寫入新 log 時都會清理過期檔案。
-- `查看差異` 已改成開啟獨立 review 視窗，後端 diff API 會回傳每個檔案的 patch，並可在新視窗完成人工確認後回送主畫面。
-- 差異頁已改為懶載入單檔 patch：初次只抓檔案清單，點擊檔案時才呼叫單檔 diff API，避免 timeout。
-- 已新增 Phase 2 差異快取規格，定義摘要快取、單檔 patch 快取、API、TTL、失效與 UI 流程。
-- Phase 2 已開始實作差異快取 MVP：新增 `DiffCacheService`、cache-first 差異頁、手動刷新摘要與單檔 patch 快取。
-- 已更新文件，將 `查看差異` 正式改為 commit-based review：先看 commit 清單、點 commit 看檔案清單、從勾選 commit 直接 push；實際 patch 內容延後。
+- `查看差異` 已改成開啟獨立 review 視窗，主流程改為 commit-based review。
+- review 視窗先讀 ahead commit 摘要快取，必要時可手動刷新最新差異。
+- 點擊單一 commit 時，後端回傳該 commit 的異動檔案清單，不再以舊 patch viewer 作為主流程。
+- 使用者可勾選一個或多個 commit，並以 `selectedCommitIds` 直接執行同步。
+- 實際 patch 內容已從本階段正式規格移除，列為後續功能。

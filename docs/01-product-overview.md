@@ -19,7 +19,7 @@
 - 若本機指定目錄尚未存在 repo，系統需先 `clone`。
 - 若本機指定目錄已存在 repo，系統需直接使用該 repo 並進行 `fetch`。
 - 使用者可透過 `checkbox` 決定同步時是否加上 `git push -f`。
-- 每次同步只執行一筆 mapping 規則。
+- 每次同步只執行一筆 rule。
 - 第一版以單人使用為主。
 - 設定必須以可複製的設定檔方式保存，方便交付給其他人直接使用。
 - 某些分支可被標記為僅允許手動同步，不得排程。
@@ -32,14 +32,14 @@
 
 1. 管理廠商 repo 設定。
 2. 管理目標 remote 設定。
-3. 管理來源 branch 與目標 branch 的 mapping 規則。
+3. 管理專案底下的來源 branch 與目標 branch 規則。
 4. 檢查本機目錄是否已有指定 repo。
 5. 在需要時自動 clone 專案。
-6. 執行單筆 mapping 同步。
+6. 執行單筆 rule 同步。
 7. 顯示同步結果與執行紀錄。
-8. 以單一主設定檔保存 remotes、mappings 與排程設定。
-9. 在 UI 中編輯並保存 remotes、mappings 與排程設定。
-10. 對特定 mapping 啟用 review gate，要求先檢視 ahead commit、查看單一 commit 的異動檔案清單，並可從挑選 commit 直接同步。
+8. 以單一主設定檔保存全局主目錄、remotes、projects、rules 與排程設定。
+9. 在 UI 中編輯並保存 remotes、projects、rules 與排程設定。
+10. 對特定 rule 啟用 review gate，要求先檢視 ahead commit、查看單一 commit 的異動檔案清單，並可從挑選 commit 直接同步。
 
 ## 非目標
 
@@ -47,7 +47,7 @@
 
 - 多使用者帳號機制
 - 資料庫
-- 批次執行多筆 mapping
+- 批次執行多筆 rule
 - 完整 Git GUI
 - 純瀏覽器直接執行 Git
 
@@ -70,7 +70,7 @@
 
 - 廠商 repo 設定
 - 目標 remote 設定
-- mapping 規則
+- 專案與同步規則
 - 排程設定
 - review gate 設定
 - 最近執行結果

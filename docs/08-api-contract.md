@@ -2,7 +2,7 @@
 
 ## 目的
 
-定義 Web UI 與 Java 17 Git Bridge 之間的 HTTP API，讓前後端可並行開發。
+定義 Web UI 與 Java 17 Git Bridge 之間目前實際使用的 HTTP API，讓前後端、文件與操作流程保持一致。
 
 ## 通用規則
 
@@ -16,29 +16,64 @@
 ```json
 {
   "error": {
-    "code": "MAPPING_NOT_FOUND",
-    "message": "Mapping does not exist",
-    "details": {
-      "mappingId": "map-uat"
-    }
+    "code": "INVALID_REQUEST",
+    "message": "Review confirmation is required",
+    "details": {}
   }
 }
 ```
 
-## 錯誤碼建議
+## 目前實作中的錯誤碼
 
 - `INVALID_REQUEST`
-- `REMOTE_NOT_FOUND`
-- `MAPPING_NOT_FOUND`
-- `CONFIG_VALIDATION_FAILED`
-- `REVIEW_CONFIRMATION_REQUIRED`
-- `SCHEDULE_NOT_ALLOWED`
-- `FORCE_PUSH_NOT_ALLOWED`
-- `REPO_NOT_FOUND`
-- `REPO_NOT_GIT`
-- `REPO_REMOTE_MISMATCH`
-- `BRANCH_NOT_FOUND`
-- `GIT_COMMAND_FAILED`
+- `NOT_FOUND`
+- `METHOD_NOT_ALLOWED`
+- `DIFF_CACHE_NOT_FOUND`
+
+## System API
+
+### `GET /api/system/config`
+
+用途：
+
+- 取得全局本地主目錄設定
+
+回應範例：
+
+```json
+{
+  "localWorkspaceRoot": "D:/git-workspace"
+}
+```
+
+### `PUT /api/system/config`
+
+用途：
+
+- 修改全局本地主目錄設定
+
+請求範例：
+
+```json
+{
+  "localWorkspaceRoot": "D:/git-workspace"
+}
+```
+
+### `POST /api/system/select-directory`
+
+用途：
+
+- 開啟本機資料夾選擇器
+- 回傳使用者選到的絕對路徑
+
+回應範例：
+
+```json
+{
+  "path": "D:/git-workspace"
+}
+```
 
 ## Remote API
 
@@ -46,7 +81,7 @@
 
 用途：
 
-- 取得所有 remote 設定
+- 取得所有 remote tab 設定
 
 ### `POST /api/remotes`
 
@@ -60,7 +95,7 @@
 {
   "id": "target-uat",
   "name": "UAT",
-  "baseUrl": "git@target.example.com:team/",
+  "baseUrl": "ssh://git@example.com:222/team/",
   "enabled": true
 }
 ```
@@ -70,75 +105,112 @@
 用途：
 
 - 修改 remote
-- 修改後必須寫回 `config/settings.json`
+- 成功後寫回 `config/settings.json`
 
 ### `DELETE /api/remotes/{id}`
 
 用途：
 
 - 刪除 remote
-- 若仍被 mapping 使用，後端必須拒絕
+- 若仍被規則使用，後端拒絕
 
-## Mapping API
+## Project API
 
-### `GET /api/mappings`
+### `GET /api/projects`
 
 用途：
 
-- 取得所有 mapping 與基本狀態
+- 取得所有專案與其規則、執行狀態、完整 target remote URL
 
 回應範例：
 
 ```json
 [
   {
-    "id": "map-uat",
-    "name": "Vendor UAT to Target UAT",
-    "sourceBranch": "UAT",
-    "targetBranch": "UAT",
-    "manualOnly": true,
-    "reviewRequired": true,
-    "lastStatus": "success",
-    "lastRunSource": "manual",
-    "lastMessage": "Sync completed",
-    "nextRunAt": null
+    "id": "fsap-adm",
+    "name": "fsap-adm",
+    "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+    "localProjectName": "fsap-adm",
+    "localRepoPath": "D:/git-workspace/fsap-adm",
+    "enabled": true,
+    "rules": [
+      {
+        "id": "rule-uat",
+        "name": "UAT -> UAT",
+        "sourceBranch": "uat",
+        "targetRemoteId": "target-uat",
+        "targetRepoName": "fsap-adm.git",
+        "targetBranch": "uat",
+        "enabled": true,
+        "allowForcePush": true,
+        "manualOnly": true,
+        "reviewRequired": true,
+        "targetRemoteName": "UAT",
+        "targetRemoteBaseUrl": "ssh://git@example.com:222/team/",
+        "targetRemoteUrl": "ssh://git@example.com:222/team/fsap-adm.git",
+        "lastRunAt": "2026-04-23T10:00:00+08:00",
+        "lastStatus": "success",
+        "lastRunSource": "manual",
+        "lastMessage": "Sync completed",
+        "lastLogPath": "2026-04-23.log",
+        "nextRunAt": null,
+        "running": false
+      }
+    ]
   }
 ]
 ```
 
-### `POST /api/mappings`
+### `POST /api/projects`
 
 用途：
 
-- 新增 mapping
-
-### `PUT /api/mappings/{id}`
-
-用途：
-
-- 修改 mapping
-- UI 修改 remote、branch、是否自動同步、review gate 等設定時都走此 API
-- 成功後必須寫回 `config/settings.json`
-
-### `DELETE /api/mappings/{id}`
-
-用途：
-
-- 刪除 mapping
-- 成功後應一併移除對應 runtime state
+- 新增專案
 
 請求範例：
 
 ```json
 {
-  "name": "Vendor SIT to Target SIT",
-  "vendorRepoUrl": "https://vendor.example.com/project.git",
-  "localWorkspaceRoot": "D:/git-workspace",
-  "localProjectName": "vendor-project",
-  "sourceBranch": "SIT",
+  "id": "fsap-adm",
+  "name": "fsap-adm",
+  "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+  "localProjectName": "fsap-adm",
+  "enabled": true,
+  "rules": []
+}
+```
+
+### `PUT /api/projects/{projectId}`
+
+用途：
+
+- 修改專案
+- 成功後寫回 `config/settings.json`
+
+### `DELETE /api/projects/{projectId}`
+
+用途：
+
+- 刪除專案
+- 成功後一併移除該專案底下規則的 runtime state 與 diff cache
+
+### `PUT /api/projects/{projectId}/rules/{ruleId}`
+
+用途：
+
+- 新增或修改單一規則
+- 成功後寫回 `config/settings.json`
+
+請求範例：
+
+```json
+{
+  "id": "rule-sit",
+  "name": "SIT -> SIT",
+  "sourceBranch": "sit",
   "targetRemoteId": "target-sit",
-  "targetRepoName": "project.git",
-  "targetBranch": "SIT",
+  "targetRepoName": "fsap-adm.git",
+  "targetBranch": "sit",
   "sameBranchNameExpected": true,
   "enabled": true,
   "allowForcePush": true,
@@ -147,14 +219,21 @@
   "schedule": {
     "enabled": true,
     "type": "fixed-interval",
-    "intervalMinutes": 30
+    "intervalMinutes": 1
   }
 }
 ```
 
-## Validate API
+### `DELETE /api/projects/{projectId}/rules/{ruleId}`
 
-### `POST /api/mappings/{id}/validate`
+用途：
+
+- 刪除單一規則
+- 成功後一併移除 runtime state 與 diff cache
+
+## Rule API
+
+### `POST /api/rules/{ruleId}/validate`
 
 用途：
 
@@ -164,39 +243,45 @@
 
 ```json
 {
-  "mappingId": "map-sit",
+  "projectId": "fsap-adm",
+  "ruleId": "rule-sit",
   "ok": true,
   "checks": [
-    { "key": "mapping_enabled", "ok": true },
+    { "key": "project_enabled", "ok": true },
+    { "key": "rule_enabled", "ok": true },
+    { "key": "repo_path_exists", "ok": true },
     { "key": "repo_ready", "ok": true },
-    { "key": "branch_exists", "ok": true },
+    { "key": "vendor_branch_exists", "ok": true },
     { "key": "target_remote_template_exists", "ok": true },
     { "key": "target_repo_name_valid", "ok": true }
   ]
 }
 ```
 
-## Diff API
-
-### `POST /api/mappings/{id}/diff`
+### `POST /api/rules/{ruleId}/diff`
 
 用途：
 
-- 取得來源與目標分支差異摘要
-- 回傳目前 ahead commit 清單
-- `reviewRequired=true` 的 mapping，UI 應先呼叫此 API
-- 後端需回傳由 `baseUrl + targetRepoName` 組成的完整目標 URL
+- 即時計算來源與目標分支的差異摘要
+- 回傳 ahead commit 清單與整體 changed file summary
 
 回應範例：
 
 ```json
 {
-  "mappingId": "map-uat",
-  "sourceBranch": "UAT",
-  "targetBranch": "UAT",
-  "targetRepoName": "project.git",
+  "projectId": "fsap-adm",
+  "projectName": "fsap-adm",
+  "ruleId": "rule-uat",
+  "ruleName": "UAT -> UAT",
+  "sourceBranch": "uat",
+  "targetBranch": "uat",
+  "targetRepoName": "fsap-adm.git",
   "targetRemoteName": "UAT",
-  "targetRemoteUrl": "git@target.example.com:team/project.git",
+  "targetRemoteUrl": "ssh://git@example.com:222/team/fsap-adm.git",
+  "allowForcePush": true,
+  "reviewRequired": true,
+  "compareBase": "def5678",
+  "compareHead": "abc1234",
   "summary": {
     "aheadCommits": 2,
     "changedFiles": 6
@@ -204,55 +289,66 @@
   "commits": [
     {
       "id": "abc1234",
-      "title": "Fix payment validation",
+      "shortId": "abc1234",
       "author": "SeanLiu",
       "committedAt": "2026-04-23T10:00:00+08:00",
+      "title": "Fix payment validation",
       "selectable": true
     }
   ],
-  "files": []
-}
-```
-
-說明：
-
-- `files` 在此 API 中只作為整體摘要欄位，可為空
-- 單一 commit 的異動檔案清單由下方 API 取得
-- 本階段不提供實際檔案 diff 內容
-
-### `GET /api/mappings/{id}/diff/commits/{commitId}/files`
-
-用途：
-
-- 取得指定 commit 的異動檔案清單
-
-回應範例：
-
-```json
-{
-  "mappingId": "map-uat",
-  "commitId": "abc1234",
-  "title": "Fix payment validation",
   "files": [
     {
       "status": "M",
-      "path": "src/payment/Validator.java"
-    },
-    {
-      "status": "A",
-      "path": "src/payment/ValidatorTest.java"
+      "path": "src/payment/Validator.java",
+      "oldPath": null,
+      "displayPath": "src/payment/Validator.java"
     }
   ]
 }
 ```
 
-## Sync API
+### `GET /api/rules/{ruleId}/diff-cache`
 
-### `POST /api/mappings/{id}/sync`
+用途：
+
+- 讀取該規則最近一次 commit review 摘要快取
+
+### `POST /api/rules/{ruleId}/diff-cache/refresh`
+
+用途：
+
+- 重新抓取最新 commit review 摘要並更新快取
+
+### `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
+
+用途：
+
+- 讀取單一 commit 的異動檔案清單
+- 若快取不存在，後端現場計算後回寫快取
+
+回應範例：
+
+```json
+{
+  "commitId": "abc1234",
+  "title": "Fix payment validation",
+  "files": [
+    {
+      "status": "M",
+      "path": "src/payment/Validator.java",
+      "oldPath": null,
+      "displayPath": "src/payment/Validator.java"
+    }
+  ]
+}
+```
+
+### `POST /api/rules/{ruleId}/sync`
 
 用途：
 
 - 手動執行單筆同步
+- 可做整支 branch 同步，也可用 `selectedCommitIds` 做 commit-based sync
 
 請求範例：
 
@@ -268,40 +364,41 @@
 
 1. 若 `allowForcePush=false`，不得接受 `forcePush=true`
 2. 若 `reviewRequired=true`，不得接受 `reviewConfirmed=false`
-3. 若同步來源為排程，後端不得對 `manualOnly=true` 的 mapping 執行
-4. 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支 branch 全量 push
-5. `selectedCommitIds` 應依來源 branch 歷史順序傳入
+3. 若 `reviewRequired=true`，目前要求 `selectedCommitIds` 不可為空
+4. 若同步來源為排程，後端不得對 `manualOnly=true` 的規則執行
+5. 若帶入 `selectedCommitIds`，後端以目標 branch 為基準建立暫時分支並 `cherry-pick` 這批 commit
+6. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
 
 回應範例：
 
 ```json
 {
-  "runId": "20260420T220000-map-uat",
-  "mappingId": "map-uat",
+  "runId": "20260423T181000-rule-uat",
+  "projectId": "fsap-adm",
+  "projectName": "fsap-adm",
+  "ruleId": "rule-uat",
+  "ruleName": "UAT -> UAT",
   "status": "success",
-  "targetRepoName": "project.git",
-  "targetRemoteUrl": "git@target.example.com:team/project.git",
+  "sourceBranch": "uat",
+  "localRepoPath": "D:/git-workspace/fsap-adm",
+  "targetRemoteId": "target-uat",
+  "targetRepoName": "fsap-adm.git",
+  "targetBranch": "uat",
+  "targetRemoteUrl": "ssh://git@example.com:222/team/fsap-adm.git",
   "forcePush": true,
   "reviewConfirmed": true,
+  "selectedCommitIds": ["abc1234", "def5678"],
   "message": "Sync completed",
-  "logPath": "2026-04-20.log"
+  "logPath": "2026-04-23.log"
 }
 ```
 
-## Schedule API
-
-### `GET /api/schedules`
+### `PUT /api/rules/{ruleId}/schedule`
 
 用途：
 
-- 取得排程視圖資料
-
-### `PUT /api/mappings/{id}/schedule`
-
-用途：
-
-- 修改某筆 mapping 的排程
-- 成功後必須寫回 `config/settings.json`
+- 修改某筆規則的排程
+- 成功後寫回 `config/settings.json`
 
 請求範例：
 
@@ -313,27 +410,13 @@
 }
 ```
 
-規則：
+## Schedule API
 
-1. 若 `manualOnly=true`，此 API 必須拒絕 `enabled=true`
-2. 成功後必須重新載入 scheduler
-
-## System API
-
-### `POST /api/system/select-directory`
+### `GET /api/schedules`
 
 用途：
 
-- 開啟本機資料夾選擇器
-- 回傳使用者選到的絕對路徑
-
-回應範例：
-
-```json
-{
-  "path": "D:/git/vendor-project"
-}
-```
+- 取得所有規則的排程檢視資料
 
 ## Log API
 
@@ -341,14 +424,14 @@
 
 用途：
 
-- 取得指定每日 log 檔案內容
-- `logId` 可直接使用 `lastLogPath` 或 sync 回應中的 `logPath`
+- 讀取指定每日 log 檔
+- 目前 log 檔名格式為 `YYYY-MM-DD.log`
 
 回應範例：
 
 ```json
 {
-  "logId": "2026-04-20.log",
-  "content": "===== 20260420T220000-map-uat =====\n..."
+  "logId": "2026-04-23.log",
+  "content": "===== 20260423T181000-rule-uat =====\n..."
 }
 ```
