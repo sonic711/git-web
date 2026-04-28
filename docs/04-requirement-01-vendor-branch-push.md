@@ -16,7 +16,7 @@
 
 ## 已確認規格
 
-- 廠商來源使用 `HTTPS` repo URL。
+- 廠商來源可使用 `HTTP`、`HTTPS` 或 `SSH` repo URL。
 - 目標 remote 使用 `SSH` URL。
 - 若本機指定目錄沒有 repo，系統需先 clone。
 - 若本機指定目錄已有 repo，系統需直接使用並更新。
@@ -62,7 +62,7 @@
 {
   "id": "map-sit",
   "name": "Vendor SIT to Target A SIT",
-  "vendorRepoUrl": "https://vendor.example.com/project.git",
+  "vendorRepoUrl": "ssh://git@vendor.example.com/team/project.git",
   "localWorkspaceRoot": "D:/git-workspace",
   "localProjectName": "vendor-project",
   "sourceBranch": "SIT",

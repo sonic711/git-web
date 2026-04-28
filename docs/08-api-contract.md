@@ -129,7 +129,7 @@
   {
     "id": "fsap-adm",
     "name": "fsap-adm",
-    "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+    "vendorRepoUrl": "ssh://git@vendor.example.com/team/fsap-adm.git",
     "localProjectName": "fsap-adm",
     "localRepoPath": "D:/git-workspace/fsap-adm",
     "enabled": true,

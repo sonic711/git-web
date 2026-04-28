@@ -35,7 +35,7 @@
     {
       "id": "fsap-adm",
       "name": "fsap-adm",
-      "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+      "vendorRepoUrl": "ssh://git@vendor.example.com/team/fsap-adm.git",
       "localProjectName": "fsap-adm",
       "enabled": true,
       "rules": [
@@ -96,7 +96,7 @@
 - `name`: `string`
   UI 顯示名稱
 - `vendorRepoUrl`: `string`
-  廠商 repo HTTPS URL
+  廠商 repo URL，可為 `http://`、`https://`、`ssh://` 或 `git@host:path.git`
 - `localProjectName`: `string`
   本地專案資料夾名稱，實際 repo 路徑為 `localWorkspaceRoot/localProjectName`
 - `enabled`: `boolean`

@@ -115,7 +115,7 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
     {
       "id": "fsap-adm",
       "name": "fsap-adm",
-      "vendorRepoUrl": "https://vendor.example.com/fsap-adm.git",
+      "vendorRepoUrl": "ssh://git@vendor.example.com/team/fsap-adm.git",
       "localProjectName": "fsap-adm",
       "enabled": true,
       "rules": [
@@ -372,7 +372,7 @@ Java 服務需內建背景排程器：
 - 手動執行單筆 rule
 - 背景排程執行多筆 rule
 - 特定 rule 可設定為 manual-only 與 review-required
-- 廠商來源為 `HTTPS`
+- 廠商來源可為 `HTTP`、`HTTPS` 或 `SSH`
 - 目標 remote 為 `SSH`
 - 單一 JSON 主設定檔
 - runtime state 檔

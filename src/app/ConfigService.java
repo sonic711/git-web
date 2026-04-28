@@ -229,8 +229,8 @@ final class ConfigService {
             Models.require(projectIds.add(project.id), "duplicate project id: " + project.id);
             Models.require(project.name != null && !project.name.isBlank(), "project name is required");
             Models.require(project.vendorRepoUrl != null && !project.vendorRepoUrl.isBlank(), "vendorRepoUrl is required");
-            Models.require(project.vendorRepoUrl.startsWith("https://") || project.vendorRepoUrl.startsWith("http://"),
-                "vendorRepoUrl must be HTTP/HTTPS");
+            Models.require(isSupportedVendorRepoUrl(project.vendorRepoUrl),
+                "vendorRepoUrl must be HTTP, HTTPS, ssh://, or git@host:path.git");
             Models.require(project.localProjectName != null && !project.localProjectName.isBlank(),
                 "localProjectName is required");
             for (RuleConfig rule : project.rules) {
@@ -252,6 +252,13 @@ final class ConfigService {
 
     private String projectKey(ProjectConfig project) {
         return project.vendorRepoUrl + "|" + project.localProjectName;
+    }
+
+    private boolean isSupportedVendorRepoUrl(String vendorRepoUrl) {
+        return vendorRepoUrl.startsWith("http://")
+            || vendorRepoUrl.startsWith("https://")
+            || vendorRepoUrl.startsWith("ssh://")
+            || vendorRepoUrl.startsWith("git@");
     }
 
     synchronized Map<String, Object> configAsMap() {

@@ -23,7 +23,7 @@
 - 本機後端使用 `Java 17` localhost HTTP 服務。
 - Git 執行方式為 Java 透過 `ProcessBuilder` 呼叫系統 `git`。
 - 不使用資料庫。
-- 廠商 repo 使用 `HTTPS`。
+- 廠商 repo 可使用 `HTTP`、`HTTPS` 或 `SSH`。
 - 目標 remote 使用 `SSH`。
 - 若本機目錄沒有 repo，需先 `clone`。
 - 若本機目錄已有 repo，需直接 `fetch` 後同步。

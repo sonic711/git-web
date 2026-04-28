@@ -14,7 +14,7 @@
 
 - 執行環境只有 `Java 17`，且本機已安裝 `git`。
 - 系統採離線部署，不依賴 Internet 服務，但需能連到實際要存取的 Git server。
-- 廠商來源使用 `HTTPS`。
+- 廠商來源可使用 `HTTP`、`HTTPS` 或 `SSH`。
 - 目標 remote 使用 `SSH`。
 - 若本機指定目錄尚未存在 repo，系統需先 `clone`。
 - 若本機指定目錄已存在 repo，系統需直接使用該 repo 並進行 `fetch`。
