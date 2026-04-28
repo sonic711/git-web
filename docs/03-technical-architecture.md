@@ -204,6 +204,8 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 
 - `GET /api/system/config`
 - `PUT /api/system/config`
+- `GET /api/system/config/export`
+- `POST /api/system/config/import`
 - `POST /api/system/select-directory`
 - `GET /api/remotes`
 - `POST /api/remotes`
@@ -230,6 +232,8 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - 所有由 UI 修改的設定都必須寫回 `config/settings.json`
 - 設定寫回成功後，後端必須重新載入 in-memory 規則與排程
 - 匯出的主設定檔不得依賴 `state/runtime-state.json`
+- 匯出的主設定檔不得包含 `localWorkspaceRoot`
+- 匯入設定檔若未帶 `localWorkspaceRoot`，系統可保留本機既有值；若本機也尚未設定，則規則可顯示但排程不得自動執行
 
 ## `POST /api/rules/{ruleId}/sync`
 

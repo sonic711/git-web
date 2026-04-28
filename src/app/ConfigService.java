@@ -39,6 +39,21 @@ final class ConfigService {
         current = config;
     }
 
+    synchronized void importConfig(Map<String, Object> rawConfig) throws IOException {
+        AppConfig imported = AppConfig.fromMap(rawConfig);
+        normalizeLegacyConfig(imported);
+        if (imported.localWorkspaceRoot == null || imported.localWorkspaceRoot.isBlank()) {
+            imported.localWorkspaceRoot = current.localWorkspaceRoot;
+        }
+        replaceConfig(imported);
+    }
+
+    synchronized Map<String, Object> exportConfigMap() {
+        Map<String, Object> exported = new LinkedHashMap<>(current.toMap());
+        exported.remove("localWorkspaceRoot");
+        return exported;
+    }
+
     synchronized void upsertRemote(RemoteConfig remote) throws IOException {
         AppConfig config = current;
         boolean replaced = false;
@@ -220,10 +235,6 @@ final class ConfigService {
 
         Set<String> projectIds = new HashSet<>();
         Set<String> ruleIds = new HashSet<>();
-        if (!config.projects.isEmpty()) {
-            Models.require(config.localWorkspaceRoot != null && !config.localWorkspaceRoot.isBlank(),
-                "localWorkspaceRoot is required");
-        }
         for (ProjectConfig project : config.projects) {
             Models.require(project.id != null && !project.id.isBlank(), "project id is required");
             Models.require(projectIds.add(project.id), "duplicate project id: " + project.id);

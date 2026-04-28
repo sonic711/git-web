@@ -32,21 +32,21 @@ final class SchedulerService {
     }
 
     void refreshScheduleState() throws IOException {
-        AppConfig config = configService.getConfig();
-        for (ProjectConfig project : config.projects) {
-            for (RuleConfig rule : project.rules) {
-                RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
-                String nextRun = computeNextRun(rule, state);
-                runtimeStateService.setNextRun(rule.id, nextRun);
+            AppConfig config = configService.getConfig();
+            for (ProjectConfig project : config.projects) {
+                for (RuleConfig rule : project.rules) {
+                    RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
+                    String nextRun = computeNextRun(config, project, rule, state);
+                    runtimeStateService.setNextRun(rule.id, nextRun);
+                }
             }
-        }
     }
 
     private void tick() {
         try {
             AppConfig config = configService.getConfig();
             for (ProjectConfig project : config.projects) {
-                if (!project.enabled) {
+                if (!project.enabled || !project.hasEffectiveWorkspaceRoot(config)) {
                     continue;
                 }
                 for (RuleConfig rule : project.rules) {
@@ -69,8 +69,8 @@ final class SchedulerService {
         }
     }
 
-    private String computeNextRun(RuleConfig rule, RuleRuntimeState state) {
-        if (rule.manualOnly || !rule.schedule.enabled) {
+    private String computeNextRun(AppConfig config, ProjectConfig project, RuleConfig rule, RuleRuntimeState state) {
+        if (rule.manualOnly || !rule.schedule.enabled || !project.hasEffectiveWorkspaceRoot(config)) {
             return null;
         }
         OffsetDateTime existingNextRun = parseTime(state.nextRunAt);

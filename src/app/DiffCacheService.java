@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 final class DiffCacheService {
     private final Path cacheRoot;
@@ -128,6 +129,23 @@ final class DiffCacheService {
         try (var walk = Files.walk(ruleRoot)) {
             for (Path path : walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).toList()) {
                 Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    synchronized void retainRuleIds(Set<String> ruleIds) throws IOException {
+        if (!Files.exists(cacheRoot)) {
+            return;
+        }
+        try (var stream = Files.list(cacheRoot)) {
+            for (Path ruleDir : stream.toList()) {
+                if (!Files.isDirectory(ruleDir)) {
+                    continue;
+                }
+                String ruleId = ruleDir.getFileName().toString();
+                if (!ruleIds.contains(ruleId)) {
+                    deleteRule(ruleId);
+                }
             }
         }
     }

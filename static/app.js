@@ -508,6 +508,58 @@ async function saveSystemSettings() {
   }
 }
 
+async function exportConfig() {
+  try {
+    const config = await withLoading('匯出設定檔中...', () =>
+      api('/api/system/config/export')
+    );
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    anchor.href = downloadUrl;
+    anchor.download = `settings-export-${yyyy}-${mm}-${dd}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(downloadUrl);
+    showToast('設定檔已匯出，內容不包含全局本地主目錄', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+function promptImportConfig() {
+  const input = document.getElementById('importConfigFile');
+  input.value = '';
+  input.click();
+}
+
+async function importConfigFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+  try {
+    const text = await file.text();
+    JSON.parse(text);
+    const result = await withLoading('匯入設定檔中...', () =>
+      api('/api/system/config/import', { method: 'POST', body: text })
+    );
+    await loadAll({ silent: true });
+    if (result.requiresWorkspaceRoot) {
+      showToast('設定檔已匯入，請先設定全局本地主目錄後再同步', 'success');
+    } else {
+      showToast('設定檔已匯入', 'success');
+    }
+  } catch (error) {
+    showToast(error.message || '匯入設定檔失敗', 'error');
+  }
+}
+
 async function saveProject(event) {
   event.preventDefault();
   try {
@@ -805,6 +857,9 @@ document.getElementById('projectForm').addEventListener('submit', saveProject);
 document.getElementById('ruleForm').addEventListener('submit', saveRule);
 document.getElementById('remoteForm').addEventListener('submit', saveRemote);
 document.getElementById('saveSystemSettingsButton').addEventListener('click', saveSystemSettings);
+document.getElementById('exportConfigButton').addEventListener('click', exportConfig);
+document.getElementById('importConfigButton').addEventListener('click', promptImportConfig);
+document.getElementById('importConfigFile').addEventListener('change', importConfigFile);
 document.getElementById('newProjectButton').addEventListener('click', newProject);
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());

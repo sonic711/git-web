@@ -219,8 +219,10 @@
 ## 匯入匯出規則
 
 1. 匯出只處理 `config/settings.json`
-2. 匯入後系統需重新驗證 schema
-3. 匯入成功後需重新載入 remotes、projects、rules 與 scheduler
-4. `state/runtime-state.json` 不可包含在正式匯出中
-5. 舊版 `mappings[*]` 設定匯入時可由程式自動轉成 `projects[*].rules[*]`
-6. 舊版 `remotes[*].url` / `group` 設定匯入時可由程式轉成 `baseUrl` 與 `name`
+2. 匯出內容不得包含 `localWorkspaceRoot`
+3. 匯入後系統需重新驗證 schema
+4. 匯入成功後需重新載入 remotes、projects、rules 與 scheduler
+5. `state/runtime-state.json` 不可包含在正式匯出中
+6. 若匯入檔未帶 `localWorkspaceRoot`，系統可保留本機既有值；若本機也未設定，使用者需先補上全局本地主目錄
+7. 舊版 `mappings[*]` 設定匯入時可由程式自動轉成 `projects[*].rules[*]`
+8. 舊版 `remotes[*].url` / `group` 設定匯入時可由程式轉成 `baseUrl` 與 `name`

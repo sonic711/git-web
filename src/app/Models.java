@@ -147,15 +147,26 @@ final class Models {
         }
 
         Path localRepoPath(AppConfig appConfig) {
-            return Path.of(effectiveWorkspaceRoot(appConfig)).resolve(localProjectName);
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig);
+            require(workspaceRoot != null && !workspaceRoot.isBlank(), "localWorkspaceRoot is required");
+            return Path.of(workspaceRoot).resolve(localProjectName);
         }
 
         String displayLocalRepoPath(AppConfig appConfig) {
-            return localRepoPath(appConfig).toString();
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig);
+            if (workspaceRoot == null || workspaceRoot.isBlank()) {
+                return "";
+            }
+            return Path.of(workspaceRoot).resolve(localProjectName).toString();
         }
 
         String effectiveWorkspaceRoot(AppConfig appConfig) {
             return firstNonBlank(appConfig.localWorkspaceRoot, localWorkspaceRoot);
+        }
+
+        boolean hasEffectiveWorkspaceRoot(AppConfig appConfig) {
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig);
+            return workspaceRoot != null && !workspaceRoot.isBlank();
         }
     }
 
@@ -486,5 +497,15 @@ final class Models {
             }
         }
         throw new IllegalArgumentException("Rule not found: " + ruleId);
+    }
+
+    static java.util.Set<String> allRuleIds(AppConfig config) {
+        java.util.Set<String> ruleIds = new java.util.LinkedHashSet<>();
+        for (ProjectConfig project : config.projects) {
+            for (RuleConfig rule : project.rules) {
+                ruleIds.add(rule.id);
+            }
+        }
+        return ruleIds;
     }
 }

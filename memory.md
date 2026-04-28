@@ -52,6 +52,7 @@
 - 專案列表需支援將同一專案底下的多條規則摺疊 / 展開，避免主畫面過長。
 - 自動同步需允許不同本地 repo 的專案並行執行；只有限制同一本地 repo 的規則需排隊。
 - UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
+- UI 已提供設定檔匯出 / 匯入；匯出內容不包含 `localWorkspaceRoot`，避免他機匯入後直接沿用原工作根目錄。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
 - log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
 - `查看差異` 需改為 commit-based review：先顯示 ahead commit 清單，再點選單一 commit 顯示異動檔案清單。
@@ -166,3 +167,4 @@
 - 使用者可勾選一個或多個 commit，並以 `selectedCommitIds` 直接執行同步。
 - selected commit 會由後端依來源歷史順序 cherry-pick；若發生 conflict，後端會中止同步，不會 push。
 - 實際 patch 內容已從本階段正式規格移除，列為後續功能。
+- 已實作設定檔匯出 / 匯入：匯出時移除 `localWorkspaceRoot`；匯入後若本機仍未設定主目錄，排程會先跳過這些規則。

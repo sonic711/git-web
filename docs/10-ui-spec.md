@@ -62,6 +62,26 @@
 9. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
 10. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
 
+## Settings 區
+
+用途：
+
+- 修改全局本地主目錄
+- 匯出可攜式設定檔
+- 匯入可攜式設定檔
+
+操作：
+
+- `儲存全局設定`
+- `匯出設定檔`
+- `匯入設定檔`
+
+互動規則：
+
+1. `匯出設定檔` 產生的 JSON 不得包含 `localWorkspaceRoot`
+2. 使用者匯入設定檔後，若本機尚未設定 `localWorkspaceRoot`，UI 應提示先設定全局本地主目錄
+3. 匯入成功後需重新載入 remotes、projects、rules 與 scheduler 狀態
+
 ## 2. Mapping Modal
 
 用途：

@@ -98,6 +98,10 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 ));
                 return;
             }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/system/config/export".equals(path)) {
+                HttpUtil.sendJson(exchange, 200, configService.exportConfigMap());
+                return;
+            }
             if ("PUT".equals(exchange.getRequestMethod()) && "/api/system/config".equals(path)) {
                 Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                 String localWorkspaceRoot = Models.nullableString(body.get("localWorkspaceRoot"));
@@ -106,6 +110,22 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 schedulerService.refreshScheduleState();
                 HttpUtil.sendJson(exchange, 200, Map.of(
                     "localWorkspaceRoot", localWorkspaceRoot == null ? "" : localWorkspaceRoot
+                ));
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/system/config/import".equals(path)) {
+                Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                configService.importConfig(body);
+                var ruleIds = Models.allRuleIds(configService.getConfig());
+                runtimeStateService.retainRuleIds(ruleIds);
+                diffCacheService.retainRuleIds(ruleIds);
+                diffCacheService.markAllStale("Configuration imported");
+                schedulerService.refreshScheduleState();
+                AppConfig config = configService.getConfig();
+                HttpUtil.sendJson(exchange, 200, Map.of(
+                    "imported", true,
+                    "localWorkspaceRoot", config.localWorkspaceRoot == null ? "" : config.localWorkspaceRoot,
+                    "requiresWorkspaceRoot", config.localWorkspaceRoot == null || config.localWorkspaceRoot.isBlank()
                 ));
                 return;
             }

@@ -60,6 +60,41 @@
 }
 ```
 
+### `GET /api/system/config/export`
+
+用途：
+
+- 匯出可攜式主設定檔
+- 回傳內容不包含 `localWorkspaceRoot`
+
+### `POST /api/system/config/import`
+
+用途：
+
+- 匯入主設定檔
+- 若匯入內容未帶 `localWorkspaceRoot`，系統保留本機既有值；若本機也未設定，匯入後需由使用者補上
+
+請求範例：
+
+```json
+{
+  "version": 1,
+  "updatedAt": "2026-04-28T10:00:00+08:00",
+  "remotes": [],
+  "projects": []
+}
+```
+
+回應範例：
+
+```json
+{
+  "imported": true,
+  "localWorkspaceRoot": "",
+  "requiresWorkspaceRoot": true
+}
+```
+
 ### `POST /api/system/select-directory`
 
 用途：

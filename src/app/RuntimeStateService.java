@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
 
 final class RuntimeStateService {
     private final Path statePath;
@@ -89,6 +90,12 @@ final class RuntimeStateService {
     synchronized void delete(String mappingId) throws IOException {
         current.mappingStates.remove(mappingId);
         save();
+    }
+
+    synchronized void retainRuleIds(Set<String> ruleIds) throws IOException {
+        if (current.mappingStates.keySet().removeIf(ruleId -> !ruleIds.contains(ruleId))) {
+            save();
+        }
     }
 
     private RuntimeState load() throws IOException {
