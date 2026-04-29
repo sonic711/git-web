@@ -60,6 +60,12 @@ final class RuntimeStateService {
         save();
     }
 
+    synchronized void clearNextRun(String mappingId) throws IOException {
+        RuleRuntimeState state = getOrCreate(mappingId);
+        state.nextRunAt = null;
+        save();
+    }
+
     synchronized void recoverInterruptedRun(String mappingId, String lastMessage) throws IOException {
         RuleRuntimeState state = getOrCreate(mappingId);
         if (!state.running) {

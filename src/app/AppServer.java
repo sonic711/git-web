@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -226,10 +227,14 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 if (parts.length == 6 && "rules".equals(parts[4])) {
                     String ruleId = parts[5];
                     if ("PUT".equals(exchange.getRequestMethod())) {
+                        RuleConfig existingRule = findRuleById(projectId, ruleId);
                         Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                         body.put("id", ruleId);
                         RuleConfig rule = RuleConfig.fromMap(body);
                         configService.upsertRule(projectId, rule);
+                        if (scheduleChanged(existingRule, rule)) {
+                            runtimeStateService.clearNextRun(rule.id);
+                        }
                         diffCacheService.markStale(rule.id, "Rule updated");
                         schedulerService.refreshScheduleState();
                         HttpUtil.sendJson(exchange, 200, rule.toMap());
@@ -302,6 +307,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 if ("schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
                     selection.rule.schedule = Models.ScheduleConfig.fromMap(HttpUtil.readJsonObject(exchange));
                     configService.upsertRule(selection.project.id, selection.rule);
+                    runtimeStateService.clearNextRun(ruleId);
                     diffCacheService.markStale(ruleId, "Rule schedule updated");
                     schedulerService.refreshScheduleState();
                     HttpUtil.sendJson(exchange, 200, selection.rule.toMap());
@@ -571,5 +577,31 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             commitIds.add(Models.stringValue(item));
         }
         return commitIds;
+    }
+
+    private RuleConfig findRuleById(String projectId, String ruleId) {
+        ProjectConfig project = Models.findProject(configService.getConfig(), projectId);
+        for (RuleConfig rule : project.rules) {
+            if (ruleId.equals(rule.id)) {
+                return rule;
+            }
+        }
+        return null;
+    }
+
+    private boolean scheduleChanged(RuleConfig existingRule, RuleConfig updatedRule) {
+        if (existingRule == null) {
+            return false;
+        }
+        if (existingRule.manualOnly != updatedRule.manualOnly) {
+            return true;
+        }
+        if (existingRule.schedule.enabled != updatedRule.schedule.enabled) {
+            return true;
+        }
+        if (!Objects.equals(existingRule.schedule.type, updatedRule.schedule.type)) {
+            return true;
+        }
+        return existingRule.schedule.intervalMinutes != updatedRule.schedule.intervalMinutes;
     }
 }

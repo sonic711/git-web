@@ -231,6 +231,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 
 - 所有由 UI 修改的設定都必須寫回 `config/settings.json`
 - 設定寫回成功後，後端必須重新載入 in-memory 規則與排程
+- 若使用者修改某條 rule 的排程開關、`manualOnly` 或 `intervalMinutes`，後端必須先清除該 rule 舊的 `nextRunAt` 再重算
 - 匯出的主設定檔不得依賴 `state/runtime-state.json`
 - 匯出的主設定檔不得包含 `localWorkspaceRoot`
 - 匯入設定檔若未帶 `localWorkspaceRoot`，系統可保留本機既有值；若本機也尚未設定，則規則可顯示但排程不得自動執行

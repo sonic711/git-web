@@ -442,6 +442,7 @@ commit-based sync 錯誤情境：
 
 - 修改某筆規則的排程
 - 成功後寫回 `config/settings.json`
+- 成功後清除該規則既有 `nextRunAt`，再依新設定重新計算首次排程時間
 
 請求範例：
 

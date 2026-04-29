@@ -158,7 +158,8 @@
 
 1. `manualOnly=true` 的規則不可啟用自動同步
 2. 修改後必須立即寫回 `config/settings.json`
-3. 儲存成功後後端需重新載入 scheduler
+3. 若有修改排程開關或間隔，後端需先清除該 rule 舊的 `nextRunAt`
+4. 儲存成功後後端需重新載入 scheduler
 
 ## 5. Diff / Review 頁
 
