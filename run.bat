@@ -4,6 +4,8 @@ setlocal enabledelayedexpansion
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
+set "PORT=8080"
+
 if not exist out mkdir out
 
 set "JAVA_SOURCES="
@@ -19,4 +21,4 @@ if "%JAVA_SOURCES%"=="" (
 javac -d out %JAVA_SOURCES%
 if errorlevel 1 exit /b 1
 
-java -cp out app.App
+java -cp out app.App %PORT%

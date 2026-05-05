@@ -3,6 +3,8 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+$port = 8080
+
 if (-not (Test-Path "out")) {
     New-Item -ItemType Directory -Path "out" | Out-Null
 }
@@ -13,4 +15,4 @@ if (-not $sources -or $sources.Count -eq 0) {
 }
 
 javac -d out $sources
-java -cp out app.App
+java -cp out app.App $port

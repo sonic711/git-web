@@ -6,7 +6,8 @@
 
 ## 通用規則
 
-- Base URL: `http://127.0.0.1:8080`
+- Base URL: `http://127.0.0.1:{port}`
+- 預設 port 為 `8080`，可由 `run.sh`、`run.bat`、`run.ps1` 內的啟動參數調整
 - Content-Type: `application/json`
 - 所有時間欄位使用 ISO-8601
 - 所有錯誤回應使用一致格式

@@ -59,17 +59,27 @@ macOS / Linux:
 ./run.sh
 ```
 
+若要調整 port，可直接修改 [run.sh](/Users/sonic711/Desktop/development/git-web/run.sh) 內的 `PORT`，或暫時覆蓋：
+
+```bash
+PORT=9090 ./run.sh
+```
+
 Windows Command Prompt:
 
 ```bat
 run.bat
 ```
 
+若要調整 port，可直接修改 [run.bat](/Users/sonic711/Desktop/development/git-web/run.bat) 內的 `set "PORT=8080"`。
+
 Windows PowerShell:
 
 ```powershell
 .\run.ps1
 ```
+
+若要調整 port，可直接修改 [run.ps1](/Users/sonic711/Desktop/development/git-web/run.ps1) 內的 `$port = 8080`。
 
 前提：
 
