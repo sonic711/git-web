@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
+import javax.swing.JFrame;
 import javax.swing.JFileChooser;
 import javax.swing.UIManager;
 
@@ -557,13 +558,25 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         final String[] selected = new String[1];
         javax.swing.SwingUtilities.invokeAndWait(() -> {
+            JFrame frame = new JFrame("Select Local Workspace Root");
+            frame.setAlwaysOnTop(true);
+            frame.setUndecorated(true);
+            frame.setType(java.awt.Window.Type.UTILITY);
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+            frame.toFront();
+            frame.requestFocus();
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Select Local Workspace Root");
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             chooser.setAcceptAllFileFilterUsed(false);
-            int result = chooser.showOpenDialog(null);
-            if (result == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
-                selected[0] = chooser.getSelectedFile().getAbsolutePath();
+            try {
+                int result = chooser.showOpenDialog(frame);
+                if (result == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
+                    selected[0] = chooser.getSelectedFile().getAbsolutePath();
+                }
+            } finally {
+                frame.dispose();
             }
         });
         Models.require(selected[0] != null && !selected[0].isBlank(), "No directory selected");

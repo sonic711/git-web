@@ -49,7 +49,7 @@
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
-- Settings 的 `選資料夾` 應優先使用原生目錄選擇視窗，且未儲存前不得被背景自動刷新覆寫欄位內容。
+- Settings 的 `選資料夾` 應優先使用可見於前景的目錄選擇視窗；macOS 用原生視窗，Windows fallback 也不得用無 owner 的 chooser，且未儲存前不得被背景自動刷新覆寫欄位內容。
 - 若某條 rule 從未手動同步過，首次啟用自動同步後也必須立即進入排程，不可等到第一次人工執行後才開始。
 - 專案列表需支援將同一專案底下的多條規則摺疊 / 展開，避免主畫面過長。
 - 自動同步需允許不同本地 repo 的專案並行執行；只有限制同一本地 repo 的規則需排隊。
@@ -174,3 +174,4 @@
 - 修正 rule 排程時間更新後仍沿用舊 `nextRunAt` 的問題；現在修改排程時會先清掉舊排程時間，再依新設定重算首次觸發時間。
 - 服務啟動 port 已改為由啟動腳本傳入，Java 入口不再固定綁死 `8080`。
 - Settings 的資料夾選擇改為 macOS 優先使用原生 `FileDialog`；前端也加入 system settings dirty 保護，避免選完目錄後被 auto refresh 洗掉。
+- 補強 Windows / 非 macOS 的資料夾選擇器，改用帶 owner 的 Swing chooser，避免視窗跑到背景。
