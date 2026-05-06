@@ -8,6 +8,8 @@ import app.Models.RuleRuntimeState;
 import app.Models.RuleSelection;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.awt.FileDialog;
+import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -542,6 +544,16 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
 
     private String selectDirectory() throws Exception {
         Models.require(!GraphicsEnvironment.isHeadless(), "Directory chooser is not available in headless mode");
+        if (isMacOs()) {
+            String selected = selectDirectoryWithNativeDialog();
+            if (selected != null && !selected.isBlank()) {
+                return selected;
+            }
+        }
+        return selectDirectoryWithSwingChooser();
+    }
+
+    private String selectDirectoryWithSwingChooser() throws Exception {
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         final String[] selected = new String[1];
         javax.swing.SwingUtilities.invokeAndWait(() -> {
@@ -556,6 +568,33 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         });
         Models.require(selected[0] != null && !selected[0].isBlank(), "No directory selected");
         return selected[0];
+    }
+
+    private String selectDirectoryWithNativeDialog() throws Exception {
+        final String[] selected = new String[1];
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            Frame frame = new Frame("Select Local Workspace Root");
+            frame.setAlwaysOnTop(true);
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+            try {
+                System.setProperty("apple.awt.fileDialogForDirectories", "true");
+                FileDialog dialog = new FileDialog(frame, "Select Local Workspace Root", FileDialog.LOAD);
+                dialog.setAlwaysOnTop(true);
+                dialog.setLocationRelativeTo(frame);
+                dialog.setVisible(true);
+                if (dialog.getDirectory() != null && dialog.getFile() != null) {
+                    selected[0] = Path.of(dialog.getDirectory(), dialog.getFile()).toAbsolutePath().toString();
+                }
+            } finally {
+                frame.dispose();
+            }
+        });
+        return selected[0];
+    }
+
+    private boolean isMacOs() {
+        return System.getProperty("os.name", "").toLowerCase().contains("mac");
     }
 
     private Map<String, Object> refreshDiffCache(RuleSelection selection) throws Exception {

@@ -75,12 +75,15 @@
 - `儲存全局設定`
 - `匯出設定檔`
 - `匯入設定檔`
+- `選資料夾`
 
 互動規則：
 
 1. `匯出設定檔` 產生的 JSON 不得包含 `localWorkspaceRoot`
 2. 使用者匯入設定檔後，若本機尚未設定 `localWorkspaceRoot`，UI 應提示先設定全局本地主目錄
 3. 匯入成功後需重新載入 remotes、projects、rules 與 scheduler 狀態
+4. `選資料夾` 應優先開啟原生目錄選擇視窗
+5. 使用者尚未按 `儲存全局設定` 前，自動刷新不得覆寫欄位中的未儲存路徑
 
 ## 2. Mapping Modal
 

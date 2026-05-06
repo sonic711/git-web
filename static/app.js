@@ -6,6 +6,7 @@ const state = {
   reviewSelections: {},
   rowForcePush: {},
   collapsedProjects: {},
+  systemSettingsDirty: false,
   autoRefreshTimer: null,
   loadingCount: 0,
 };
@@ -101,6 +102,9 @@ function render() {
 }
 
 function renderSystemSettings() {
+  if (state.systemSettingsDirty) {
+    return;
+  }
   document.getElementById('globalWorkspaceRoot').value = state.systemConfig.localWorkspaceRoot || '';
 }
 
@@ -486,6 +490,7 @@ async function pickGlobalWorkspaceRoot() {
       api('/api/system/select-directory', { method: 'POST', body: '{}' })
     );
     document.getElementById('globalWorkspaceRoot').value = result.path || '';
+    state.systemSettingsDirty = true;
     updateLocalRepoPathPreview();
   } catch (error) {
     showToast(error.message, 'error');
@@ -500,6 +505,7 @@ async function saveSystemSettings() {
     await withLoading('儲存全局設定中...', () =>
       api('/api/system/config', { method: 'PUT', body: JSON.stringify(payload) })
     );
+    state.systemSettingsDirty = false;
     await loadAll({ silent: true });
     updateLocalRepoPathPreview();
     showToast('全局設定已儲存', 'success');
@@ -865,7 +871,10 @@ document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());
 document.getElementById('pickGlobalWorkspaceRootButton').addEventListener('click', pickGlobalWorkspaceRoot);
 document.getElementById('vendorRepoUrl').addEventListener('input', syncProjectFormRules);
-document.getElementById('globalWorkspaceRoot').addEventListener('input', updateLocalRepoPathPreview);
+document.getElementById('globalWorkspaceRoot').addEventListener('input', () => {
+  state.systemSettingsDirty = true;
+  updateLocalRepoPathPreview();
+});
 document.getElementById('localProjectName').addEventListener('input', updateLocalRepoPathPreview);
 document.getElementById('sameBranchNameExpected').addEventListener('change', syncRuleFormRules);
 document.getElementById('sourceBranch').addEventListener('input', syncRuleFormRules);
