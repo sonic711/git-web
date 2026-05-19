@@ -60,7 +60,10 @@
 7. 若 `reviewRequired=true` 且未人工確認，`同步` 按鈕需 disabled
 8. 若 review 畫面尚未選取 commit，不得允許 commit-based push
 9. 列表需清楚顯示 `lastStatus`、`lastRunSource` 與失敗訊息
-10. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
+10. 手動同步按鈕按下後，前端不等待 Git 完成，而是立即取得 `jobId`
+11. 當前有手動同步 job 時，列表需顯示 `queued` 或 `running`
+12. 同一筆 rule 若已有手動同步 job 在 `queued / running`，同步按鈕需 disabled
+13. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
 
 ## Settings 區
 
@@ -262,6 +265,8 @@
 7. 使用者人工確認
 8. 呼叫 `POST /api/rules/{ruleId}/sync`
 9. request body 帶入 `selectedCommitIds`
+10. 立即取得 `jobId` 與 `queued` 狀態後返回列表
+11. 前端輪詢 job 狀態，直到 `success / failed`
 
 ### 刪除
 

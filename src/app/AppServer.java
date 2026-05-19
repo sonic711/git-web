@@ -6,6 +6,7 @@ import app.Models.RemoteConfig;
 import app.Models.RuleConfig;
 import app.Models.RuleRuntimeState;
 import app.Models.RuleSelection;
+import app.Models.SyncJob;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.FileDialog;
@@ -36,9 +37,10 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private final LogService logService;
     private final DiffCacheService diffCacheService;
     private final SchedulerService schedulerService;
+    private final SyncJobService syncJobService;
     private final Path staticDir;
     private final Map<String, ReentrantLock> repoLocks = new ConcurrentHashMap<>();
-    private final ExecutorService scheduledSyncExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService syncExecutor = Executors.newCachedThreadPool();
     private HttpServer server;
 
     AppServer(ConfigService configService, RuntimeStateService runtimeStateService, GitService gitService, LogService logService,
@@ -49,6 +51,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         this.logService = logService;
         this.diffCacheService = diffCacheService;
         this.staticDir = staticDir;
+        this.syncJobService = new SyncJobService();
         this.schedulerService = new SchedulerService(configService, runtimeStateService, this);
     }
 
@@ -60,6 +63,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         server.createContext("/api/remotes", this::handleRemotes);
         server.createContext("/api/projects", this::handleProjects);
         server.createContext("/api/rules", this::handleRules);
+        server.createContext("/api/sync-jobs", this::handleSyncJobs);
         server.createContext("/api/schedules", this::handleSchedules);
         server.createContext("/api/logs", this::handleLogs);
         server.createContext("/", this::handleStatic);
@@ -77,12 +81,12 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             server.stop(0);
         }
         schedulerService.stop();
-        scheduledSyncExecutor.shutdownNow();
+        syncExecutor.shutdownNow();
     }
 
     @Override
     public void runScheduledSync(String ruleId) {
-        scheduledSyncExecutor.submit(() -> {
+        syncExecutor.submit(() -> {
             try {
                 runtimeStateService.markRunning(ruleId, true);
                 sync(ruleId, false, false, "schedule");
@@ -303,8 +307,8 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     Map<String, Object> body = HttpUtil.readJsonObject(exchange);
                     boolean forcePush = Models.booleanValue(body.getOrDefault("forcePush", Boolean.FALSE));
                     boolean reviewConfirmed = Models.booleanValue(body.getOrDefault("reviewConfirmed", Boolean.FALSE));
-                    HttpUtil.sendJson(exchange, 200, sync(ruleId, forcePush, reviewConfirmed,
-                        parseSelectedCommitIds(body.get("selectedCommitIds")), "manual"));
+                    HttpUtil.sendJson(exchange, 202, enqueueManualSync(ruleId, forcePush, reviewConfirmed,
+                        parseSelectedCommitIds(body.get("selectedCommitIds"))));
                     return;
                 }
                 if ("schedule".equals(parts[4]) && "PUT".equals(exchange.getRequestMethod())) {
@@ -385,6 +389,25 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 }
             }
             HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
+        } catch (Exception exception) {
+            HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
+        }
+    }
+
+    private void handleSyncJobs(HttpExchange exchange) throws IOException {
+        try {
+            String path = exchange.getRequestURI().getPath();
+            if (!"GET".equals(exchange.getRequestMethod()) || !path.startsWith("/api/sync-jobs/")) {
+                HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
+                return;
+            }
+            String jobId = path.substring("/api/sync-jobs/".length());
+            SyncJob job = syncJobService.get(jobId);
+            if (job == null) {
+                HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Sync job not found", Map.of("jobId", jobId)));
+                return;
+            }
+            HttpUtil.sendJson(exchange, 200, job.toMap());
         } catch (Exception exception) {
             HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
         }
@@ -478,12 +501,50 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 ruleItem.put("lastLogPath", state.lastLogPath);
                 ruleItem.put("nextRunAt", state.nextRunAt);
                 ruleItem.put("running", state.running);
+                SyncJob activeJob = syncJobService.getActiveManualJobForRule(rule.id);
+                if (activeJob != null) {
+                    ruleItem.put("currentJobId", activeJob.jobId);
+                    ruleItem.put("currentJobStatus", activeJob.status);
+                    ruleItem.put("currentJobMessage", activeJob.message);
+                    ruleItem.put("currentJobQueuedAt", activeJob.queuedAt);
+                    ruleItem.put("currentJobStartedAt", activeJob.startedAt);
+                    ruleItem.put("currentJobTriggerSource", activeJob.triggerSource);
+                }
                 rules.add(ruleItem);
             }
             projectItem.put("rules", rules);
             items.add(projectItem);
         }
         return items;
+    }
+
+    private Map<String, Object> enqueueManualSync(String ruleId, boolean forcePush, boolean reviewConfirmed,
+                                                  List<String> selectedCommitIds)
+        throws Exception {
+        AppConfig config = configService.getConfig();
+        RuleSelection selection = Models.findRuleSelection(config, ruleId);
+        ProjectConfig project = selection.project;
+        RuleConfig rule = selection.rule;
+        SyncJob job = syncJobService.createManualJob(project, rule, forcePush, reviewConfirmed, selectedCommitIds);
+        runtimeStateService.markQueued(rule.id, "manual", "Sync job queued");
+        syncExecutor.submit(() -> runManualSyncJob(job.jobId, forcePush, reviewConfirmed, selectedCommitIds));
+        return job.toMap();
+    }
+
+    private void runManualSyncJob(String jobId, boolean forcePush, boolean reviewConfirmed, List<String> selectedCommitIds) {
+        SyncJob job = syncJobService.get(jobId);
+        if (job == null) {
+            return;
+        }
+        try {
+            syncJobService.markRunning(jobId);
+            Map<String, Object> result = sync(job.ruleId, forcePush, reviewConfirmed, selectedCommitIds, "manual");
+            syncJobService.markSuccess(jobId, Models.nullableString(result.get("logPath")));
+        } catch (Exception exception) {
+            String logPath = runtimeStateService.getOrCreate(job.ruleId).lastLogPath;
+            syncJobService.markFailed(jobId, exception.getMessage(), logPath);
+            exception.printStackTrace();
+        }
     }
 
     private Map<String, Object> sync(String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource)

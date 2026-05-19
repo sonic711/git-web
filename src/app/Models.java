@@ -365,6 +365,44 @@ final class Models {
         }
     }
 
+    static final class SyncJob {
+        String jobId;
+        String ruleId;
+        String ruleName;
+        String projectId;
+        String projectName;
+        String triggerSource;
+        String status;
+        boolean forcePush;
+        boolean reviewConfirmed;
+        List<String> selectedCommitIds = new ArrayList<>();
+        String queuedAt;
+        String startedAt;
+        String finishedAt;
+        String message;
+        String logPath;
+
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("jobId", jobId);
+            map.put("ruleId", ruleId);
+            map.put("ruleName", ruleName);
+            map.put("projectId", projectId);
+            map.put("projectName", projectName);
+            map.put("triggerSource", triggerSource);
+            map.put("status", status);
+            map.put("forcePush", forcePush);
+            map.put("reviewConfirmed", reviewConfirmed);
+            map.put("selectedCommitIds", new ArrayList<>(selectedCommitIds));
+            map.put("queuedAt", queuedAt);
+            map.put("startedAt", startedAt);
+            map.put("finishedAt", finishedAt);
+            map.put("message", message);
+            map.put("logPath", logPath);
+            return map;
+        }
+    }
+
     static final class RuleSelection {
         final ProjectConfig project;
         final RuleConfig rule;

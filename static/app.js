@@ -7,6 +7,7 @@ const state = {
   rowForcePush: {},
   collapsedProjects: {},
   systemSettingsDirty: false,
+  syncJobPolls: {},
   autoRefreshTimer: null,
   loadingCount: 0,
 };
@@ -167,12 +168,20 @@ function toggleProjectCollapse(projectId) {
 }
 
 function renderRuleRow(project, rule) {
-  const statusClass = rule.lastStatus === 'failed' ? 'failed'
-    : rule.lastStatus === 'success' ? 'success'
-    : rule.lastStatus === 'running' ? 'running' : '';
+  const displayStatus = rule.currentJobStatus || rule.lastStatus || 'never';
+  const displayTime = rule.currentJobStartedAt || rule.currentJobQueuedAt || rule.lastRunAt;
+  const displaySource = rule.currentJobTriggerSource || rule.lastRunSource;
+  const displayMessage = rule.currentJobMessage || rule.lastMessage || '';
+  const statusClass = displayStatus === 'failed' ? 'failed'
+    : displayStatus === 'success' ? 'success'
+    : displayStatus === 'running' ? 'running'
+    : displayStatus === 'queued' ? 'queued' : '';
   const reviewReady = isReviewReady(rule.id);
   const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
-  const syncDisabled = rule.reviewRequired && !reviewReady;
+  const syncDisabled = !!rule.currentJobStatus || (rule.reviewRequired && !reviewReady);
+  const syncLabel = rule.currentJobStatus === 'queued' ? '排隊中'
+    : rule.currentJobStatus === 'running' ? '同步中'
+    : '同步';
   return `
     <tr>
       <td>
@@ -195,10 +204,10 @@ function renderRuleRow(project, rule) {
         </div>
       </td>
       <td>
-        <span class="tag ${statusClass}">${escapeHtml(rule.lastStatus || 'never')}</span>
-        <div class="status-copy">${escapeHtml(formatDateTime(rule.lastRunAt))}</div>
-        <div class="status-copy">${escapeHtml(rule.lastRunSource || '-')}</div>
-        <div class="status-copy">${escapeHtml(rule.lastMessage || '')}</div>
+        <span class="tag ${statusClass}">${escapeHtml(displayStatus)}</span>
+        <div class="status-copy">${escapeHtml(formatDateTime(displayTime))}</div>
+        <div class="status-copy">${escapeHtml(displaySource || '-')}</div>
+        <div class="status-copy">${escapeHtml(displayMessage)}</div>
       </td>
       <td>${escapeHtml(formatDateTime(rule.nextRunAt))}</td>
       <td>
@@ -220,7 +229,7 @@ function renderRuleRow(project, rule) {
           <div class="inline-actions">
             <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯</button>
             <button class="secondary" onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
-            <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">同步</button>
+            <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">${syncLabel}</button>
             <button class="secondary" onclick="validateRule('${escapeAttr(rule.id)}')">驗證</button>
             <button class="secondary" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除</button>
           </div>
@@ -724,6 +733,9 @@ async function runSync(ruleId) {
   try {
     const selection = ruleSelection(ruleId);
     if (!selection) return;
+    if (selection.rule.currentJobStatus) {
+      throw new Error('這筆規則已有進行中的手動同步 job');
+    }
     const forcePush = !!state.rowForcePush[ruleId] && !!selection.rule.allowForcePush;
     const reviewConfirmed = !selection.rule.reviewRequired || isReviewReady(ruleId);
     const selectedCommitIds = selection.rule.reviewRequired ? selectedCommitIdsFor(ruleId) : [];
@@ -733,7 +745,7 @@ async function runSync(ruleId) {
     if (selection.rule.reviewRequired && !selectedCommitIds.length) {
       throw new Error('請先在查看差異畫面中選擇至少一筆 commit');
     }
-    const result = await withLoading('同步中，請稍候...', () =>
+    const result = await withLoading('提交同步工作中...', () =>
       api(`/api/rules/${ruleId}/sync`, {
         method: 'POST',
         body: JSON.stringify({ forcePush, reviewConfirmed, selectedCommitIds }),
@@ -741,13 +753,45 @@ async function runSync(ruleId) {
     );
     document.getElementById('logView').textContent = JSON.stringify(result, null, 2);
     await loadAll({ silent: true });
-    if (result.logPath) {
-      await loadLog(result.logPath);
+    if (result.jobId) {
+      trackSyncJob(result.jobId);
     }
-    showToast(result.message || '同步成功', 'success');
+    showToast(result.message || '同步工作已排入佇列', 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
+}
+
+async function trackSyncJob(jobId) {
+  if (!jobId || state.syncJobPolls[jobId]) {
+    return;
+  }
+  state.syncJobPolls[jobId] = true;
+  try {
+    while (true) {
+      const job = await api(`/api/sync-jobs/${encodeURIComponent(jobId)}`);
+      if (job.status === 'queued' || job.status === 'running') {
+        await loadAll({ silent: true });
+        await delay(2000);
+        continue;
+      }
+      await loadAll({ silent: true });
+      if (job.logPath) {
+        await loadLog(job.logPath);
+      }
+      showToast(job.message || (job.status === 'success' ? '同步成功' : '同步失敗'),
+        job.status === 'success' ? 'success' : 'error');
+      break;
+    }
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    delete state.syncJobPolls[jobId];
+  }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function deleteProject(projectId) {

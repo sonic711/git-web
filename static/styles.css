@@ -278,6 +278,11 @@ th {
   color: #8a5b0d;
 }
 
+.tag.queued {
+  background: #f2f0e8;
+  color: #6d6359;
+}
+
 .viewer {
   min-height: 220px;
   margin: 0;

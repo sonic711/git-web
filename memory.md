@@ -56,6 +56,7 @@
 - UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
 - UI 已提供設定檔匯出 / 匯入；匯出內容不包含 `localWorkspaceRoot`，避免他機匯入後直接沿用原工作根目錄。
 - 若使用者修改 rule 的排程開關、`manualOnly` 或排程間隔，系統必須先清除舊的 `nextRunAt`，避免沿用修改前的首次觸發時間。
+- 手動同步不應阻塞 UI；應改成背景 job 模式，讓不同 repo 可並行、同 repo 仍排隊。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
 - log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
 - `查看差異` 需改為 commit-based review：先顯示 ahead commit 清單，再點選單一 commit 顯示異動檔案清單。
@@ -175,3 +176,6 @@
 - 服務啟動 port 已改為由啟動腳本傳入，Java 入口不再固定綁死 `8080`。
 - Settings 的資料夾選擇改為 macOS 優先使用原生 `FileDialog`；前端也加入 system settings dirty 保護，避免選完目錄後被 auto refresh 洗掉。
 - 補強 Windows / 非 macOS 的資料夾選擇器，改用帶 owner 的 Swing chooser，避免視窗跑到背景。
+- 已更新規格：手動同步將改成背景 job，`POST /api/rules/{ruleId}/sync` 只負責排入佇列並回傳 `jobId`。
+- 已實作手動同步背景 job：手動同步 API 立即回 `jobId`，不同 repo 可並行，同 rule 若已有 `queued / running` job 則拒絕重複提交。
+- `queued` 狀態也視為暫時占用中，避免同一筆 rule 的排程同步在手動 job 尚未開始時插隊。

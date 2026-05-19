@@ -225,6 +225,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - `GET /api/rules/{ruleId}/diff/commits/{commitId}/files`
 - `PUT /api/rules/{ruleId}/schedule`
 - `POST /api/rules/{ruleId}/sync`
+- `GET /api/sync-jobs/{jobId}`
 - `GET /api/logs/{logId}`
 
 設定維護要求：
@@ -250,6 +251,8 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 
 說明：
 
+- 此 API 不等待 Git 同步完成，僅負責建立一筆背景同步 job
+- API 成功時應回 `202 Accepted` 與 `jobId`
 - `forcePush=true` 表示本次同步需加上 `git push -f`
 - 若規則本身 `allowForcePush=false`，後端必須拒絕此請求
 - 若規則本身 `reviewRequired=true`，則 `reviewConfirmed` 必須為 `true`
@@ -258,6 +261,25 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - commit-based push 以目標 branch 為基準建立暫時分支，再逐一 `cherry-pick` 選取的 commit
 - 若選取的 commit 依賴未選取的前置 commit，或目標 branch 已修改同一段內容，`cherry-pick` 可能衝突並導致本次同步失敗
 - 目前不提供互動式衝突解決；發生衝突時後端應中止本次同步並清理暫時分支
+
+## `GET /api/sync-jobs/{jobId}`
+
+用途：
+
+- 查詢單筆同步 job 狀態
+
+狀態建議：
+
+- `queued`
+- `running`
+- `success`
+- `failed`
+
+說明：
+
+- 手動同步與排程同步都可共用同一套 job 狀態模型
+- 同一本地 repo 的多筆 job 可同時存在，但實際執行仍須經過 repo lock 排隊
+- 不同本地 repo 的 job 可並行執行
 
 ## `POST /api/rules/{ruleId}/diff`
 
@@ -328,6 +350,15 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 10. 若本次為 commit-based push，後端以目標 branch 為基準建立暫時同步分支，依順序 `cherry-pick` 選取的 commit。
 11. 執行 `git push` 或 `git push -f`。
 
+## 手動同步執行策略
+
+- 手動同步應與排程同步一樣交由背景 worker 執行
+- UI 按下同步後只提交 job，不等待 Git 完成
+- 同一筆 rule 若已有 `queued` 或 `running` job，排程器與手動提交都不得再次觸發
+- 同一本地 repo 繼續沿用 lock 排隊，避免 worktree / branch 狀態互相覆蓋
+- 不同本地 repo 可由背景 executor 並行執行
+- 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕重複提交
+
 commit-based push 限制：
 
 - 適合套用可獨立 cherry-pick 的 commit。
@@ -374,7 +405,7 @@ Java 服務需內建背景排程器：
 
 - 單機部署
 - 單人使用優先
-- 手動執行單筆 rule
+- 手動執行單筆 rule，且以背景 job 非阻塞方式提交
 - 背景排程執行多筆 rule
 - 特定 rule 可設定為 manual-only 與 review-required
 - 廠商來源可為 `HTTP`、`HTTPS` 或 `SSH`

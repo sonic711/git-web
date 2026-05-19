@@ -104,17 +104,19 @@
 
 1. 使用者在列表頁選擇一筆 rule。
 2. 使用者決定本次是否勾選 `Force Push`。
-3. UI 呼叫本機 Java API。
-4. Java API 載入設定檔。
-5. 系統檢查實際 repo 路徑是否已有 repo。
-6. 若沒有 repo，執行 clone。
-7. 若已有 repo，驗證該目錄為有效 Git repo。
-8. 執行 `git fetch origin --prune`。
-9. 將本地來源分支對齊 `origin/<sourceBranch>`，並執行 `git pull --ff-only origin <sourceBranch>`。
-10. 建立或更新目標 remote。
-11. 依 checkbox 狀態決定一般 push 或 `push -f`。
-12. 若 rule 啟用 review gate，先檢查是否已完成人工確認。
-13. 寫入 log 並回傳結果。
+3. UI 呼叫本機 Java API 建立同步 job。
+4. Java API 立即回傳 `jobId` 與 `queued` 狀態。
+5. UI 透過列表或 job API 顯示 `queued / running / success / failed`。
+6. 背景 worker 載入設定檔。
+7. 系統檢查實際 repo 路徑是否已有 repo。
+8. 若沒有 repo，執行 clone。
+9. 若已有 repo，驗證該目錄為有效 Git repo。
+10. 執行 `git fetch origin --prune`。
+11. 將本地來源分支對齊 `origin/<sourceBranch>`，並執行 `git pull --ff-only origin <sourceBranch>`。
+12. 建立或更新目標 remote。
+13. 依 checkbox 狀態決定一般 push 或 `push -f`。
+14. 若 rule 啟用 review gate，先檢查是否已完成人工確認。
+15. 寫入 log 並更新 job / runtime state。
 
 ## Review Gate 流程
 
@@ -124,9 +126,9 @@
 4. 使用者點擊單一 commit，可查看該 commit 的異動檔案清單。
 5. 使用者勾選一個或多個 commit 作為本次要同步的內容。
 6. 使用者人工確認後，才可點擊同步。
-7. 後端驗證該次同步請求帶有人工確認標記與選取的 commit 清單後才執行。
-8. 後端以目標 branch 為基準建立暫時分支，並依來源歷史順序 `cherry-pick` 選取的 commit。
-9. 若 cherry-pick 發生衝突，本次同步失敗，不會 push 到目標 remote。
+7. 後端驗證該次同步請求帶有人工確認標記與選取的 commit 清單後，建立背景同步 job。
+8. 背景 worker 以目標 branch 為基準建立暫時分支，並依來源歷史順序 `cherry-pick` 選取的 commit。
+9. 若 cherry-pick 發生衝突，本次同步 job 失敗，不會 push 到目標 remote。
 
 ## 失敗處理流程
 

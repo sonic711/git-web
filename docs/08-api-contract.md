@@ -190,7 +190,13 @@
         "lastMessage": "Sync completed",
         "lastLogPath": "2026-04-23.log",
         "nextRunAt": null,
-        "running": false
+        "running": false,
+        "currentJobId": "job-20260519T101500-rule-uat",
+        "currentJobStatus": "queued",
+        "currentJobMessage": "Sync job queued",
+        "currentJobQueuedAt": "2026-05-19T10:15:00+08:00",
+        "currentJobStartedAt": null,
+        "currentJobTriggerSource": "manual"
       }
     ]
   }
@@ -383,7 +389,7 @@
 
 用途：
 
-- 手動執行單筆同步
+- 建立一筆手動同步背景 job
 - 可做整支 branch 同步，也可用 `selectedCommitIds` 做 commit-based sync
 
 請求範例：
@@ -406,6 +412,7 @@
 6. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
 7. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
 8. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
+9. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求
 
 commit-based sync 錯誤情境：
 
@@ -413,16 +420,16 @@ commit-based sync 錯誤情境：
 - 目標 branch 已修改同一段內容，導致 cherry-pick conflict
 - 目標 branch 不存在，目前 commit-based sync 會拒絕執行
 
-回應範例：
+成功回應範例：
 
 ```json
 {
-  "runId": "20260423T181000-rule-uat",
+  "jobId": "job-20260519T101500-rule-uat",
   "projectId": "fsap-adm",
   "projectName": "fsap-adm",
   "ruleId": "rule-uat",
   "ruleName": "UAT -> UAT",
-  "status": "success",
+  "status": "queued",
   "sourceBranch": "uat",
   "localRepoPath": "D:/git-workspace/fsap-adm",
   "targetRemoteId": "target-uat",
@@ -432,8 +439,39 @@ commit-based sync 錯誤情境：
   "forcePush": true,
   "reviewConfirmed": true,
   "selectedCommitIds": ["abc1234", "def5678"],
-  "message": "Sync completed",
-  "logPath": "2026-04-23.log"
+  "message": "Sync job queued"
+}
+```
+
+建議 HTTP 狀態碼：
+
+- `202 Accepted`
+
+### `GET /api/sync-jobs/{jobId}`
+
+用途：
+
+- 查詢單筆同步 job 目前狀態
+
+回應範例：
+
+```json
+{
+  "jobId": "job-20260519T101500-rule-uat",
+  "ruleId": "rule-uat",
+  "ruleName": "UAT -> UAT",
+  "projectId": "fsap-adm",
+  "projectName": "fsap-adm",
+  "triggerSource": "manual",
+  "status": "running",
+  "forcePush": true,
+  "reviewConfirmed": true,
+  "selectedCommitIds": ["abc1234", "def5678"],
+  "queuedAt": "2026-05-19T10:15:00+08:00",
+  "startedAt": "2026-05-19T10:15:01+08:00",
+  "finishedAt": null,
+  "message": "Sync running",
+  "logPath": null
 }
 ```
 

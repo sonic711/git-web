@@ -40,6 +40,15 @@ final class RuntimeStateService {
         save();
     }
 
+    synchronized void markQueued(String mappingId, String triggerSource, String lastMessage) throws IOException {
+        RuleRuntimeState state = getOrCreate(mappingId);
+        state.running = true;
+        state.lastStatus = "queued";
+        state.lastRunSource = triggerSource;
+        state.lastMessage = lastMessage;
+        save();
+    }
+
     synchronized void markFinished(String mappingId, String status, String triggerSource, String nextRunAt, String logPath,
                                    String lastMessage)
         throws IOException {
@@ -80,7 +89,7 @@ final class RuntimeStateService {
     synchronized void clearAllRunningStates(String lastMessage) throws IOException {
         boolean changed = false;
         for (RuleRuntimeState state : current.mappingStates.values()) {
-            if (!state.running) {
+            if (!state.running && !"queued".equals(state.lastStatus)) {
                 continue;
             }
             state.running = false;
