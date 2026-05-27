@@ -243,6 +243,7 @@ final class GitService {
             pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
             results.add(runChecked(repoPath, pushCommand));
         }
+        pushTags(repoPath, internalRemote, forcePush, results);
 
         return new SyncResult(results, requestedCommitIds);
     }
@@ -295,6 +296,19 @@ final class GitService {
             runner.run(repoPath, List.of("git", "checkout", rule.sourceBranch));
             runner.run(repoPath, List.of("git", "branch", "-D", tempBranch));
         }
+    }
+
+    private void pushTags(Path repoPath, String internalRemote, boolean forcePush, List<GitCommandResult> results)
+        throws IOException, InterruptedException {
+        List<String> pushTagsCommand = new ArrayList<>();
+        pushTagsCommand.add("git");
+        pushTagsCommand.add("push");
+        if (forcePush) {
+            pushTagsCommand.add("-f");
+        }
+        pushTagsCommand.add(internalRemote);
+        pushTagsCommand.add("--tags");
+        results.add(runChecked(repoPath, pushTagsCommand));
     }
 
     private void ensureRepoReady(AppConfig config, ProjectConfig project) throws IOException, InterruptedException {

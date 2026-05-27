@@ -143,7 +143,8 @@
 14. 若 rule 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
 15. 允許使用者挑選本次要同步的 commit。
 16. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
-17. 記錄結果並回傳 UI。
+17. branch push 成功後，將該專案 repo 的所有 tags 一併 push 到目標 remote。
+18. 記錄結果並回傳 UI。
 
 ## Review Gate 流程
 
@@ -179,6 +180,8 @@ git -C <localRepoPath> remote add <generatedTargetRemoteName> <targetUrl>
 git -C <localRepoPath> remote set-url <generatedTargetRemoteName> <targetUrl>
 git -C <localRepoPath> push <generatedTargetRemoteName> <sourceBranch>:refs/heads/<targetBranch>
 git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/heads/<targetBranch>
+git -C <localRepoPath> push <generatedTargetRemoteName> --tags
+git -C <localRepoPath> push -f <generatedTargetRemoteName> --tags
 ```
 
 實際執行時，不需每次都執行 `remote add` 與 `remote set-url`；應由系統判斷 remote 是否已存在後再處理。
@@ -213,6 +216,7 @@ git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/h
 - SSH 權限不足
 - HTTPS 認證失敗
 - push 被拒絕
+- tag push 被拒絕
 - selected commit 無法 cherry-pick 到目標 branch
 - force push 被使用者規則禁止
 - manual-only 規則被排程觸發

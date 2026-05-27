@@ -257,6 +257,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - 若規則本身 `allowForcePush=false`，後端必須拒絕此請求
 - 若規則本身 `reviewRequired=true`，則 `reviewConfirmed` 必須為 `true`
 - 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支來源 branch 的全量 push
+- branch push 成功後，後端還需將該 repo 的所有 tags push 到同一個目標 remote
 - `selectedCommitIds` 可由 UI 依使用者勾選順序傳入，後端會再依來源 branch 歷史順序排序後執行
 - commit-based push 以目標 branch 為基準建立暫時分支，再逐一 `cherry-pick` 選取的 commit
 - 若選取的 commit 依賴未選取的前置 commit，或目標 branch 已修改同一段內容，`cherry-pick` 可能衝突並導致本次同步失敗
@@ -349,6 +350,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 9. 使用者可挑選一個或多個 commit，並查看單一 commit 的異動檔案清單。
 10. 若本次為 commit-based push，後端以目標 branch 為基準建立暫時同步分支，依順序 `cherry-pick` 選取的 commit。
 11. 執行 `git push` 或 `git push -f`。
+12. branch push 成功後，再執行 `git push --tags`；若本次是 force push，tag push 也需使用 `-f`。
 
 ## 手動同步執行策略
 
