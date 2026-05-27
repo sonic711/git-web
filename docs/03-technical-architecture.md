@@ -257,7 +257,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - 若規則本身 `allowForcePush=false`，後端必須拒絕此請求
 - 若規則本身 `reviewRequired=true`，則 `reviewConfirmed` 必須為 `true`
 - 若帶入 `selectedCommitIds`，後端僅同步這批 commit，不執行整支來源 branch 的全量 push
-- branch push 成功後，後端還需將該 repo 的所有 tags push 到同一個目標 remote
+- branch push 成功後，後端還需將該 repo 的 tags push 到同一個目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
 - `selectedCommitIds` 可由 UI 依使用者勾選順序傳入，後端會再依來源 branch 歷史順序排序後執行
 - commit-based push 以目標 branch 為基準建立暫時分支，再逐一 `cherry-pick` 選取的 commit
 - 若選取的 commit 依賴未選取的前置 commit，或目標 branch 已修改同一段內容，`cherry-pick` 可能衝突並導致本次同步失敗
@@ -342,7 +342,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 1. 若實際 repo 路徑不存在，執行 clone。
 2. 若存在，驗證為 Git repo。
 3. 驗證既有 repo 的 `origin` URL 是否與 `vendorRepoUrl` 一致。
-4. 執行 `git fetch origin --prune`。
+4. 執行 `git fetch origin --prune --tags`；若 `forcePush=true`，需加上 `--force` 以更新本地已移動的 tags。
 5. 驗證 `origin/<sourceBranch>` 存在。
 6. 將本地來源分支強制對齊 `origin/<sourceBranch>`，再執行 `git pull --ff-only origin <sourceBranch>`。
 7. 建立或更新系統管理的 target remote。
@@ -350,7 +350,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 9. 使用者可挑選一個或多個 commit，並查看單一 commit 的異動檔案清單。
 10. 若本次為 commit-based push，後端以目標 branch 為基準建立暫時同步分支，依順序 `cherry-pick` 選取的 commit。
 11. 執行 `git push` 或 `git push -f`。
-12. branch push 成功後，再執行 `git push --tags`；若本次是 force push，tag push 也需使用 `-f`。
+12. branch push 成功後，再執行 `git push --tags`；若本次是 force push，tag push 也需使用 `-f`，允許目標端既有 tags 移動。
 
 ## 手動同步執行策略
 

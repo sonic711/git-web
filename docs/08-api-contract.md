@@ -410,7 +410,7 @@
 4. 若同步來源為排程，後端不得對 `manualOnly=true` 的規則執行
 5. 若帶入 `selectedCommitIds`，後端以目標 branch 為基準建立暫時分支並 `cherry-pick` 這批 commit
 6. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
-7. branch push 成功後，後端會將該 repo 的所有 tags 一併 push 到目標 remote
+7. branch push 成功後，後端會將該 repo 的 tags 一併 push 到目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
 8. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
 9. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
 10. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求

@@ -229,7 +229,7 @@ final class GitService {
         Path repoPath = project.localRepoPath(config);
 
         List<GitCommandResult> results = new ArrayList<>();
-        syncVendorBranch(config, project, rule, results);
+        syncVendorBranch(config, project, rule, forcePush, results);
         if (!requestedCommitIds.isEmpty()) {
             syncSelectedCommits(repoPath, rule, internalRemote, forcePush, requestedCommitIds, results);
         } else {
@@ -248,11 +248,12 @@ final class GitService {
         return new SyncResult(results, requestedCommitIds);
     }
 
-    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
+    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush,
+                                  List<GitCommandResult> results)
         throws IOException, InterruptedException {
         Path repoPath = project.localRepoPath(config);
         String originRef = originRef(rule);
-        results.add(fetchOrigin(repoPath));
+        results.add(fetchOrigin(repoPath, forcePush));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
         results.add(runChecked(repoPath, List.of("git", "checkout", "-B", rule.sourceBranch, "origin/" + rule.sourceBranch)));
         results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
@@ -352,7 +353,20 @@ final class GitService {
     }
 
     private GitCommandResult fetchOrigin(Path repoPath) throws IOException, InterruptedException {
-        return runChecked(repoPath, List.of("git", "fetch", "origin", "--prune"));
+        return fetchOrigin(repoPath, false);
+    }
+
+    private GitCommandResult fetchOrigin(Path repoPath, boolean forceTags) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.add("fetch");
+        command.add("origin");
+        command.add("--prune");
+        command.add("--tags");
+        if (forceTags) {
+            command.add("--force");
+        }
+        return runChecked(repoPath, command);
     }
 
     private String resolveRevision(Path repoPath, String revision) throws IOException, InterruptedException {
