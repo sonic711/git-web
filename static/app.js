@@ -185,6 +185,13 @@ function renderRuleRow(project, rule) {
     : displayStatus === 'success' ? 'success'
     : displayStatus === 'running' ? 'running'
     : displayStatus === 'queued' ? 'queued' : '';
+  const displayMessageText = displayStatus === 'failed' && displayMessage ? 'Sync Error' : displayMessage;
+  const displayMessageHtml = displayStatus === 'failed' && displayMessage
+    ? `<div class="status-copy status-tooltip" tabindex="0">
+        ${escapeHtml(displayMessageText)}
+        <span class="status-tooltip-panel">${escapeHtml(displayMessage)}</span>
+      </div>`
+    : `<div class="status-copy">${escapeHtml(displayMessageText)}</div>`;
   const reviewReady = isReviewReady(rule.id);
   const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
   const syncDisabled = !!rule.currentJobStatus || (!downloadOnly && rule.reviewRequired && !reviewReady);
@@ -219,7 +226,7 @@ function renderRuleRow(project, rule) {
         <span class="tag ${statusClass}">${escapeHtml(displayStatus)}</span>
         <div class="status-copy">${escapeHtml(formatDateTime(displayTime))}</div>
         <div class="status-copy">${escapeHtml(displaySource || '-')}</div>
-        <div class="status-copy">${escapeHtml(displayMessage)}</div>
+        ${displayMessageHtml}
       </td>
       <td>${escapeHtml(formatDateTime(rule.nextRunAt))}</td>
       <td>

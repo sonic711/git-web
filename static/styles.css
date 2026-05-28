@@ -372,6 +372,37 @@ th {
   font-size: 13px;
 }
 
+.status-tooltip {
+  position: relative;
+  display: inline-block;
+  color: #9f2d13;
+  cursor: help;
+}
+
+.status-tooltip-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 25;
+  display: none;
+  width: max-content;
+  max-width: min(520px, 70vw);
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #d98f7e;
+  border-radius: 10px;
+  background: #fff8f4;
+  color: #4b241b;
+  box-shadow: 0 12px 28px var(--shadow);
+  white-space: pre-wrap;
+}
+
+.status-tooltip:hover .status-tooltip-panel,
+.status-tooltip:focus .status-tooltip-panel {
+  display: block;
+}
+
 .modal {
   position: fixed;
   inset: 0;
