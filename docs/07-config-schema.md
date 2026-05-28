@@ -63,6 +63,7 @@
           "name": "SIT download only",
           "mode": "download-only",
           "sourceBranch": "sit",
+          "downloadWorkspaceRoot": "",
           "sameBranchNameExpected": false,
           "enabled": true,
           "allowForcePush": false,
@@ -137,6 +138,8 @@
   目標 repo 名稱，例如 `fsap-adm.git`。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `targetBranch`: `string`
   目標分支。`mode=sync` 時必填，`mode=download-only` 時忽略
+- `downloadWorkspaceRoot`: `string`
+  只下載規則的本地主目錄覆寫。`mode=download-only` 且此欄位不為空時，實際 repo 路徑為 `downloadWorkspaceRoot/localProjectName`；未設定時使用全域 `localWorkspaceRoot/localProjectName`。此欄位屬於本機路徑，匯出設定檔時會被移除
 - `sameBranchNameExpected`: `boolean`
   若為 `true`，UI 建議預設來源與目標同名
 - `enabled`: `boolean`
@@ -191,9 +194,10 @@
 7. `mode=sync` 時，`targetBranch` 不可為空
 8. `mode=download-only` 時，不需設定 `targetRemoteId`、`targetRepoName`、`targetBranch`
 9. `mode=download-only` 時，`reviewRequired` 必須為 `false`
-10. `manualOnly=true` 時，`schedule.enabled` 必須為 `false`
-11. `reviewRequired=true` 時，排程仍可保存，但排程同步不得繞過 review gate
-12. `sameBranchNameExpected=true` 不代表必須同名，但 UI 應預設帶入同名值
+10. `mode=download-only` 時，`downloadWorkspaceRoot` 可為空；空值代表使用全域本地主目錄
+11. `manualOnly=true` 時，`schedule.enabled` 必須為 `false`
+12. `reviewRequired=true` 時，排程仍可保存，但排程同步不得繞過 review gate
+13. `sameBranchNameExpected=true` 不代表必須同名，但 UI 應預設帶入同名值
 
 ## Runtime State
 

@@ -23,6 +23,7 @@
 - rule 支援 `mode`，目前包含 `sync` 與 `download-only`。
 - `sync` 模式會從來源下載到本地後，再推送到目標 remote。
 - `download-only` 模式只會從來源下載並對齊本地分支，不推送到任何目標 remote，且會強制同步來源 remote tags，包含 tag 移動與刪除。
+- `download-only` 規則可選填下載本地主目錄覆寫；未設定時使用全域本地主目錄。
 - 每次同步按鈕只提交一筆 rule，但手動同步應以背景 job 方式執行，不阻塞 UI。
 - 同步 branch 時，系統也應將來源 repo 的 tags 一併推送到目標 remote；一般同步只新增不存在的 tags，勾選 `Force Push` 時才允許移動既有 tags。
 - 第一版以單人使用為主。

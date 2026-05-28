@@ -139,6 +139,12 @@
         </div>
         <label class="sync-only-field">目標 Branch<input id="targetBranch" required></label>
         <label class="checkbox sync-only-field"><input type="checkbox" id="sameBranchNameExpected">同名分支預設</label>
+        <label class="download-only-field hidden">下載本地主目錄（選填）
+          <div class="picker-row">
+            <input id="downloadWorkspaceRoot" placeholder="未設定時使用全局本地主目錄">
+            <button type="button" class="secondary" id="pickDownloadWorkspaceRootButton">選資料夾</button>
+          </div>
+        </label>
         <label class="checkbox"><input type="checkbox" id="ruleEnabled" checked>啟用規則</label>
         <label class="checkbox sync-only-field"><input type="checkbox" id="allowForcePush">允許 Force Push</label>
         <label class="checkbox"><input type="checkbox" id="manualOnly">僅允許手動</label>

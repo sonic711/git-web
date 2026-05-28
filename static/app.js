@@ -195,7 +195,7 @@ function renderRuleRow(project, rule) {
     ? `<code>${escapeHtml(rule.sourceBranch)}</code> -> <code>本地</code>`
     : `<code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code>`;
   const targetText = downloadOnly
-    ? `<strong>只下載到本地</strong><span>${escapeHtml(project.localRepoPath || '')}</span>`
+    ? `<strong>只下載到本地</strong><span>${escapeHtml(rule.localRepoPath || project.localRepoPath || '')}</span>`
     : `<strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong><span>${escapeHtml(rule.targetRepoName)}</span>`;
   return `
     <tr>
@@ -401,6 +401,9 @@ function syncRuleFormRules() {
   document.querySelectorAll('.sync-only-field').forEach(element => {
     element.classList.toggle('hidden', downloadOnly);
   });
+  document.querySelectorAll('.download-only-field').forEach(element => {
+    element.classList.toggle('hidden', !downloadOnly);
+  });
   targetRemoteId.disabled = downloadOnly;
   targetRemoteId.required = !downloadOnly;
   targetRepoName.disabled = downloadOnly;
@@ -482,6 +485,7 @@ function editRule(projectId, ruleId) {
   document.getElementById('targetRemoteId').value = rule.targetRemoteId || '';
   document.getElementById('targetRepoName').value = rule.targetRepoName || '';
   document.getElementById('targetBranch').value = rule.targetBranch || '';
+  document.getElementById('downloadWorkspaceRoot').value = rule.downloadWorkspaceRoot || '';
   document.getElementById('sameBranchNameExpected').checked = !!rule.sameBranchNameExpected;
   document.getElementById('ruleEnabled').checked = !!rule.enabled;
   document.getElementById('allowForcePush').checked = !!rule.allowForcePush;
@@ -657,6 +661,7 @@ async function saveRule(event) {
       targetRemoteId: downloadOnly ? '' : document.getElementById('targetRemoteId').value,
       targetRepoName: downloadOnly ? '' : document.getElementById('targetRepoName').value,
       targetBranch: downloadOnly ? '' : document.getElementById('targetBranch').value,
+      downloadWorkspaceRoot: downloadOnly ? document.getElementById('downloadWorkspaceRoot').value.trim() : '',
       sameBranchNameExpected: !downloadOnly && document.getElementById('sameBranchNameExpected').checked,
       enabled: document.getElementById('ruleEnabled').checked,
       allowForcePush: !downloadOnly && document.getElementById('allowForcePush').checked,
@@ -703,6 +708,17 @@ async function saveRemote(event) {
     await loadAll({ silent: true });
     closeModal('remoteModal');
     showToast('Remote Tab 已儲存', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function pickDownloadWorkspaceRoot() {
+  try {
+    const result = await withLoading('開啟資料夾選擇器...', () =>
+      api('/api/system/select-directory', { method: 'POST', body: '{}' })
+    );
+    document.getElementById('downloadWorkspaceRoot').value = result.path || '';
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -924,6 +940,7 @@ function stripRuntimeFieldsFromRule(rule) {
     targetRemoteId: rule.targetRemoteId,
     targetRepoName: rule.targetRepoName,
     targetBranch: rule.targetBranch,
+    downloadWorkspaceRoot: rule.downloadWorkspaceRoot || '',
     sameBranchNameExpected: !!rule.sameBranchNameExpected,
     enabled: !!rule.enabled,
     allowForcePush: !!rule.allowForcePush,
@@ -966,6 +983,7 @@ document.getElementById('newProjectButton').addEventListener('click', newProject
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());
 document.getElementById('pickGlobalWorkspaceRootButton').addEventListener('click', pickGlobalWorkspaceRoot);
+document.getElementById('pickDownloadWorkspaceRootButton').addEventListener('click', pickDownloadWorkspaceRoot);
 document.getElementById('vendorRepoUrl').addEventListener('input', syncProjectFormRules);
 document.getElementById('globalWorkspaceRoot').addEventListener('input', () => {
   state.systemSettingsDirty = true;

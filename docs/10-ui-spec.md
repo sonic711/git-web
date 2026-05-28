@@ -98,12 +98,9 @@
 
 - 規則名稱
 - 規則模式：`同步到目標 Remote` / `只下載到本地`
-- 廠商 repo URL
-- 本地主目錄
-- `選資料夾` 按鈕
-- 本地專案資料夾名稱
-- 實際 repo 路徑預覽
 - 來源 branch
+- 下載本地主目錄覆寫，僅 `mode=download-only` 顯示，選填
+- 下載本地主目錄的 `選資料夾` 按鈕，僅 `mode=download-only` 顯示
 - 目標 remote tab 下拉選單
 - 目標 repo 名稱 `.git`
 - 完整目標 URL 預覽
@@ -119,12 +116,13 @@
 1. `同步到目標 Remote` 對應 `mode=sync`
 2. `只下載到本地` 對應 `mode=download-only`
 3. `mode=download-only` 時，目標 remote、目標 repo 名稱、目標 branch、Force Push 與 Review Required 欄位需 disabled 或隱藏
-4. `mode=download-only` 時，列表顯示應標示 `Download Only`
-5. 勾選 `來源與目標分支同名` 時，UI 自動把 `targetBranch` 帶成 `sourceBranch`
-6. 勾選 `僅允許手動同步` 時，排程欄位需 disabled
-7. 本地主目錄應優先使用 `選資料夾`，避免手動輸入
-8. 若本地專案資料夾名稱為空，UI 可依 `vendorRepoUrl` 自動推導預設值
-9. `mode=sync` 時，選取 remote tab 或輸入 repo 名稱需即時預覽完整 target URL
+4. `mode=download-only` 時，可選填下載本地主目錄覆寫；未設定時使用 Settings 的全域本地主目錄
+5. `mode=download-only` 時，列表顯示應標示 `Download Only`，並顯示實際下載 repo 路徑
+6. 勾選 `來源與目標分支同名` 時，UI 自動把 `targetBranch` 帶成 `sourceBranch`
+7. 勾選 `僅允許手動同步` 時，排程欄位需 disabled
+8. 本地主目錄應優先使用 `選資料夾`，避免手動輸入
+9. 若本地專案資料夾名稱為空，UI 可依 `vendorRepoUrl` 自動推導預設值
+10. `mode=sync` 時，選取 remote tab 或輸入 repo 名稱需即時預覽完整 target URL
 10. 儲存成功後必須寫回 `config/settings.json`
 
 ## 3. Remote Tab Modal

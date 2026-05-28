@@ -46,10 +46,13 @@ final class SchedulerService {
         try {
             AppConfig config = configService.getConfig();
             for (ProjectConfig project : config.projects) {
-                if (!project.enabled || !project.hasEffectiveWorkspaceRoot(config)) {
+                if (!project.enabled) {
                     continue;
                 }
                 for (RuleConfig rule : project.rules) {
+                    if (!project.hasEffectiveWorkspaceRoot(config, rule)) {
+                        continue;
+                    }
                     if (!rule.enabled || rule.manualOnly || !rule.schedule.enabled) {
                         continue;
                     }
@@ -70,7 +73,7 @@ final class SchedulerService {
     }
 
     private String computeNextRun(AppConfig config, ProjectConfig project, RuleConfig rule, RuleRuntimeState state) {
-        if (rule.manualOnly || !rule.schedule.enabled || !project.hasEffectiveWorkspaceRoot(config)) {
+        if (rule.manualOnly || !rule.schedule.enabled || !project.hasEffectiveWorkspaceRoot(config, rule)) {
             return null;
         }
         OffsetDateTime existingNextRun = parseTime(state.nextRunAt);

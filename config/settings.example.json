@@ -42,6 +42,7 @@
           "name": "SIT download only",
           "mode": "download-only",
           "sourceBranch": "sit",
+          "downloadWorkspaceRoot": "",
           "sameBranchNameExpected": false,
           "enabled": true,
           "allowForcePush": false,

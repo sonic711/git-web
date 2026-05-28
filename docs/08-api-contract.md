@@ -275,6 +275,7 @@
   "name": "SIT download only",
   "mode": "download-only",
   "sourceBranch": "sit",
+  "downloadWorkspaceRoot": "",
   "sameBranchNameExpected": false,
   "enabled": true,
   "allowForcePush": false,
@@ -413,7 +414,7 @@
 
 - 建立一筆手動背景 job
 - `mode=sync` 可做整支 branch 同步，也可用 `selectedCommitIds` 做 commit-based sync
-- `mode=download-only` 只會下載並對齊本地來源分支，不會 push 到目標 remote；本地 tags 會強制同步為來源 remote tags
+- `mode=download-only` 只會下載並對齊本地來源分支，不會 push 到目標 remote；本地 tags 會強制同步為來源 remote tags；若設定 `downloadWorkspaceRoot`，實際 repo 路徑會改為 `downloadWorkspaceRoot/localProjectName`
 
 請求範例：
 
@@ -438,9 +439,11 @@
 9. `mode=sync` 時，branch push 成功後，後端會將該 repo 的 tags 一併 push 到目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
 10. `mode=download-only` 時，不得建立或更新 target remote，也不得執行任何 push
 11. `mode=download-only` 時，後端需以 `git fetch origin --prune --tags --force --prune-tags` 同步來源，讓本地 tags 包含移動與刪除都與來源 remote 一致
-12. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
-13. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
-14. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求
+12. `mode=download-only` 且 `downloadWorkspaceRoot` 不為空時，下載 repo 路徑使用 `downloadWorkspaceRoot/localProjectName`；未設定時使用全域 `localWorkspaceRoot/localProjectName`
+13. 匯出設定檔時，`downloadWorkspaceRoot` 會被移除，避免他機匯入後直接使用本機路徑
+14. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
+15. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
+16. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求
 
 commit-based sync 錯誤情境：
 

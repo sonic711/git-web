@@ -59,12 +59,13 @@
 - 本地主目錄：`D:/git-workspace`
 - 本地專案資料夾：`vendor-project`
 - 來源 branch：`SIT`
+- 下載本地主目錄覆寫：選填，若設定為 `D:/download-workspace`，實際 repo 路徑為 `D:/download-workspace/vendor-project`
 - 不設定目標 remote
 - 不設定目標 branch
 
 執行時：
 
-1. 系統檢查實際 repo 路徑是否存在有效 Git repo。
+1. 系統依 `downloadWorkspaceRoot/localProjectName` 或全域 `localWorkspaceRoot/localProjectName` 決定實際 repo 路徑，並檢查是否存在有效 Git repo。
 2. 若不存在，先從廠商 repo clone 到指定目錄。
 3. 執行 `git fetch origin --prune --tags --force --prune-tags`，讓本地 tags 與來源 remote tags 完全對齊。
 4. 將本地 `SIT` 強制對齊 `origin/SIT`。
@@ -146,7 +147,7 @@
 2. UI 呼叫本機 Java API 建立背景 job。
 3. Java API 立即回傳 `jobId` 與 `queued` 狀態。
 4. 背景 worker 載入設定檔。
-5. 系統檢查實際 repo 路徑是否已有 repo。
+5. 系統依 `downloadWorkspaceRoot/localProjectName` 或全域 `localWorkspaceRoot/localProjectName` 決定實際 repo 路徑，並檢查是否已有 repo。
 6. 若沒有 repo，執行 clone。
 7. 若已有 repo，驗證該目錄為有效 Git repo。
 8. 執行 `git fetch origin --prune --tags --force --prune-tags`，讓本地 tags 與來源 remote tags 完全對齊。

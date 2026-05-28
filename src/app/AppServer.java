@@ -491,6 +491,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             for (RuleConfig rule : project.rules) {
                 RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
                 Map<String, Object> ruleItem = new LinkedHashMap<>(rule.toMap());
+                ruleItem.put("localRepoPath", project.displayLocalRepoPath(config, rule));
                 if (rule.isDownloadOnly()) {
                     ruleItem.put("targetRemoteName", "");
                     ruleItem.put("targetRemoteBaseUrl", "");
@@ -581,7 +582,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         RuleSelection selection = Models.findRuleSelection(config, ruleId);
         ProjectConfig project = selection.project;
         RuleConfig rule = selection.rule;
-        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath(config).toAbsolutePath().normalize().toString(),
+        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath(config, rule).toAbsolutePath().normalize().toString(),
             ignored -> new ReentrantLock());
         lock.lock();
         try {
@@ -607,7 +608,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 payload.put("mode", rule.mode);
                 payload.put("status", "success");
                 payload.put("sourceBranch", rule.sourceBranch);
-                payload.put("localRepoPath", project.displayLocalRepoPath(config));
+                payload.put("localRepoPath", project.displayLocalRepoPath(config, rule));
                 payload.put("targetRemoteId", rule.targetRemoteId);
                 payload.put("targetRepoName", rule.targetRepoName);
                 payload.put("targetBranch", rule.targetBranch);

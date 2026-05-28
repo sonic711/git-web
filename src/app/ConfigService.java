@@ -51,7 +51,19 @@ final class ConfigService {
     synchronized Map<String, Object> exportConfigMap() {
         Map<String, Object> exported = new LinkedHashMap<>(current.toMap());
         exported.remove("localWorkspaceRoot");
+        stripLocalWorkspaceRoots(exported);
         return exported;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stripLocalWorkspaceRoots(Map<String, Object> exported) {
+        for (Object projectItem : Json.asList(exported.getOrDefault("projects", java.util.List.of()))) {
+            Map<String, Object> project = (Map<String, Object>) projectItem;
+            for (Object ruleItem : Json.asList(project.getOrDefault("rules", java.util.List.of()))) {
+                Map<String, Object> rule = (Map<String, Object>) ruleItem;
+                rule.remove("downloadWorkspaceRoot");
+            }
+        }
     }
 
     synchronized void upsertRemote(RemoteConfig remote) throws IOException {

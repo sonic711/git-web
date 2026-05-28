@@ -152,8 +152,22 @@ final class Models {
             return Path.of(workspaceRoot).resolve(localProjectName);
         }
 
+        Path localRepoPath(AppConfig appConfig, RuleConfig rule) {
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig, rule);
+            require(workspaceRoot != null && !workspaceRoot.isBlank(), "localWorkspaceRoot is required");
+            return Path.of(workspaceRoot).resolve(localProjectName);
+        }
+
         String displayLocalRepoPath(AppConfig appConfig) {
             String workspaceRoot = effectiveWorkspaceRoot(appConfig);
+            if (workspaceRoot == null || workspaceRoot.isBlank()) {
+                return "";
+            }
+            return Path.of(workspaceRoot).resolve(localProjectName).toString();
+        }
+
+        String displayLocalRepoPath(AppConfig appConfig, RuleConfig rule) {
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig, rule);
             if (workspaceRoot == null || workspaceRoot.isBlank()) {
                 return "";
             }
@@ -164,8 +178,20 @@ final class Models {
             return firstNonBlank(appConfig.localWorkspaceRoot, localWorkspaceRoot);
         }
 
+        String effectiveWorkspaceRoot(AppConfig appConfig, RuleConfig rule) {
+            if (rule != null && rule.isDownloadOnly()) {
+                return firstNonBlank(rule.downloadWorkspaceRoot, appConfig.localWorkspaceRoot, localWorkspaceRoot);
+            }
+            return effectiveWorkspaceRoot(appConfig);
+        }
+
         boolean hasEffectiveWorkspaceRoot(AppConfig appConfig) {
             String workspaceRoot = effectiveWorkspaceRoot(appConfig);
+            return workspaceRoot != null && !workspaceRoot.isBlank();
+        }
+
+        boolean hasEffectiveWorkspaceRoot(AppConfig appConfig, RuleConfig rule) {
+            String workspaceRoot = effectiveWorkspaceRoot(appConfig, rule);
             return workspaceRoot != null && !workspaceRoot.isBlank();
         }
     }
@@ -181,6 +207,7 @@ final class Models {
         String targetRemoteId;
         String targetRepoName;
         String targetBranch;
+        String downloadWorkspaceRoot;
         boolean sameBranchNameExpected;
         boolean enabled = true;
         boolean allowForcePush;
@@ -197,6 +224,7 @@ final class Models {
             config.targetRemoteId = nullableString(map.get("targetRemoteId"));
             config.targetRepoName = nullableString(map.get("targetRepoName"));
             config.targetBranch = nullableString(map.get("targetBranch"));
+            config.downloadWorkspaceRoot = nullableString(map.get("downloadWorkspaceRoot"));
             config.sameBranchNameExpected = booleanValue(map.getOrDefault("sameBranchNameExpected", Boolean.FALSE));
             config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
             config.allowForcePush = booleanValue(map.getOrDefault("allowForcePush", Boolean.FALSE));
@@ -236,6 +264,7 @@ final class Models {
             map.put("targetRemoteId", targetRemoteId);
             map.put("targetRepoName", targetRepoName);
             map.put("targetBranch", targetBranch);
+            map.put("downloadWorkspaceRoot", downloadWorkspaceRoot);
             map.put("sameBranchNameExpected", sameBranchNameExpected);
             map.put("enabled", enabled);
             map.put("allowForcePush", allowForcePush);

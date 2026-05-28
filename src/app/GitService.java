@@ -27,7 +27,7 @@ final class GitService {
     Map<String, Object> validate(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         List<Object> checks = new ArrayList<>();
         boolean ok = true;
-        Path repoPath = project.localRepoPath(config);
+        Path repoPath = project.localRepoPath(config, rule);
 
         ok &= addCheck(checks, "project_enabled", project.enabled);
         ok &= addCheck(checks, "rule_enabled", rule.enabled);
@@ -58,11 +58,11 @@ final class GitService {
 
     Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         Models.require(!rule.isDownloadOnly(), "Diff is not available for download-only rules");
-        ensureRepoReady(config, project);
+        ensureRepoReady(config, project, rule);
         ensureTargetRemote(config, project, rule);
         RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
         String internalRemote = internalRemoteName(rule.id);
-        Path repoPath = project.localRepoPath(config);
+        Path repoPath = project.localRepoPath(config, rule);
         fetchOrigin(repoPath);
         runChecked(repoPath, List.of("git", "fetch", internalRemote, rule.targetBranch));
 
@@ -230,8 +230,8 @@ final class GitService {
             Models.require(!requestedCommitIds.isEmpty(), "At least one commit must be selected for review-required sync");
         }
 
-        ensureRepoReady(config, project);
-        Path repoPath = project.localRepoPath(config);
+        ensureRepoReady(config, project, rule);
+        Path repoPath = project.localRepoPath(config, rule);
 
         List<GitCommandResult> results = new ArrayList<>();
         syncVendorBranch(config, project, rule, !downloadOnly && forcePush, downloadOnly, results);
@@ -262,7 +262,7 @@ final class GitService {
     private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush, boolean exactTags,
                                   List<GitCommandResult> results)
         throws IOException, InterruptedException {
-        Path repoPath = project.localRepoPath(config);
+        Path repoPath = project.localRepoPath(config, rule);
         String originRef = originRef(rule);
         results.add(fetchOrigin(repoPath, forcePush || exactTags, exactTags));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
@@ -323,8 +323,8 @@ final class GitService {
         results.add(runChecked(repoPath, pushTagsCommand));
     }
 
-    private void ensureRepoReady(AppConfig config, ProjectConfig project) throws IOException, InterruptedException {
-        Path repoPath = project.localRepoPath(config);
+    private void ensureRepoReady(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
+        Path repoPath = project.localRepoPath(config, rule);
         if (!Files.exists(repoPath)) {
             Files.createDirectories(repoPath.getParent());
             runChecked(null, List.of("git", "clone", project.vendorRepoUrl, repoPath.toString()));
@@ -339,7 +339,7 @@ final class GitService {
     private void ensureTargetRemote(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         String name = internalRemoteName(rule.id);
         String targetUrl = targetRemoteUrl(config, rule);
-        Path repoPath = project.localRepoPath(config);
+        Path repoPath = project.localRepoPath(config, rule);
         String existingUrl = getRemoteUrl(repoPath, name);
         if (existingUrl == null) {
             runChecked(repoPath, List.of("git", "remote", "add", name, targetUrl));

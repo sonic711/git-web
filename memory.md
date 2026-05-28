@@ -49,6 +49,7 @@
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
 - rule 已支援 `mode` 欄位，目前包含 `sync` 與 `download-only`；舊設定缺漏時預設為 `sync`。
 - `download-only` 模式只從廠商 repo 下載並對齊本地來源分支，不建立 target remote，也不 push 到其他 remote；此模式會強制同步來源 remote tags，包含 tag 移動與刪除，但不支援差異 review、Force Push 或 target tags push。
+- `download-only` rule 可選填 `downloadWorkspaceRoot` 覆寫下載主目錄；未設定時使用全域 `localWorkspaceRoot`。此欄位屬於本機路徑，匯出設定檔時會移除。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
 - Settings 的 `選資料夾` 應優先使用可見於前景的目錄選擇視窗；macOS 用原生視窗，Windows fallback 也不得用無 owner 的 chooser，且未儲存前不得被背景自動刷新覆寫欄位內容。
@@ -101,6 +102,7 @@
 - remote baseUrl
 - rule targetRepoName
 - rule mode
+- rule downloadWorkspaceRoot
 - download-only rule 不需 targetRemoteId、targetRepoName、targetBranch
 
 本機執行狀態檔保存：
