@@ -27,11 +27,11 @@ final class GitService {
     Map<String, Object> validate(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         List<Object> checks = new ArrayList<>();
         boolean ok = true;
-        RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
         Path repoPath = project.localRepoPath(config);
 
         ok &= addCheck(checks, "project_enabled", project.enabled);
         ok &= addCheck(checks, "rule_enabled", rule.enabled);
+        ok &= addCheck(checks, "rule_mode_valid", RuleConfig.MODE_SYNC.equals(rule.mode) || RuleConfig.MODE_DOWNLOAD_ONLY.equals(rule.mode));
         boolean repoExists = Files.exists(repoPath);
         ok &= addCheck(checks, "repo_path_exists", repoExists);
         boolean repoReady = repoExists && isGitRepo(repoPath);
@@ -40,8 +40,13 @@ final class GitService {
             fetchOrigin(repoPath);
             ok &= addCheck(checks, "vendor_branch_exists", branchExists(repoPath, originRef(rule)));
         }
-        ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && remote.baseUrl != null && !remote.baseUrl.isBlank());
-        ok &= addCheck(checks, "target_repo_name_valid", rule.targetRepoName != null && rule.targetRepoName.endsWith(".git"));
+        if (rule.isSyncMode()) {
+            RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+            ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && remote.baseUrl != null && !remote.baseUrl.isBlank());
+            ok &= addCheck(checks, "target_repo_name_valid", rule.targetRepoName != null && rule.targetRepoName.endsWith(".git"));
+        } else {
+            ok &= addCheck(checks, "download_only_no_target_required", true);
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("projectId", project.id);
@@ -52,6 +57,7 @@ final class GitService {
     }
 
     Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
+        Models.require(!rule.isDownloadOnly(), "Diff is not available for download-only rules");
         ensureRepoReady(config, project);
         ensureTargetRemote(config, project, rule);
         RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
@@ -209,27 +215,32 @@ final class GitService {
         throws IOException, InterruptedException {
         Models.require(project.enabled, "Project is disabled");
         Models.require(rule.enabled, "Rule is disabled");
-        if (forcePush) {
+        boolean downloadOnly = rule.isDownloadOnly();
+        if (!downloadOnly && forcePush) {
             Models.require(rule.allowForcePush, "Force push is not allowed");
         }
         if ("schedule".equals(triggerSource)) {
             Models.require(!rule.manualOnly, "Manual-only rule cannot be scheduled");
         }
-        if (rule.reviewRequired) {
+        if (!downloadOnly && rule.reviewRequired) {
             Models.require(reviewConfirmed, "Review confirmation is required");
         }
         List<String> requestedCommitIds = selectedCommitIds == null ? List.of() : selectedCommitIds;
-        if (rule.reviewRequired) {
+        if (!downloadOnly && rule.reviewRequired) {
             Models.require(!requestedCommitIds.isEmpty(), "At least one commit must be selected for review-required sync");
         }
 
         ensureRepoReady(config, project);
-        ensureTargetRemote(config, project, rule);
-        String internalRemote = internalRemoteName(rule.id);
         Path repoPath = project.localRepoPath(config);
 
         List<GitCommandResult> results = new ArrayList<>();
-        syncVendorBranch(config, project, rule, forcePush, results);
+        syncVendorBranch(config, project, rule, !downloadOnly && forcePush, downloadOnly, results);
+        if (downloadOnly) {
+            return new SyncResult(results, List.of());
+        }
+
+        ensureTargetRemote(config, project, rule);
+        String internalRemote = internalRemoteName(rule.id);
         if (!requestedCommitIds.isEmpty()) {
             syncSelectedCommits(repoPath, rule, internalRemote, forcePush, requestedCommitIds, results);
         } else {
@@ -248,12 +259,12 @@ final class GitService {
         return new SyncResult(results, requestedCommitIds);
     }
 
-    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush,
+    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush, boolean exactTags,
                                   List<GitCommandResult> results)
         throws IOException, InterruptedException {
         Path repoPath = project.localRepoPath(config);
         String originRef = originRef(rule);
-        results.add(fetchOrigin(repoPath, forcePush));
+        results.add(fetchOrigin(repoPath, forcePush || exactTags, exactTags));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
         results.add(runChecked(repoPath, List.of("git", "checkout", "-B", rule.sourceBranch, "origin/" + rule.sourceBranch)));
         results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
@@ -353,10 +364,14 @@ final class GitService {
     }
 
     private GitCommandResult fetchOrigin(Path repoPath) throws IOException, InterruptedException {
-        return fetchOrigin(repoPath, false);
+        return fetchOrigin(repoPath, false, false);
     }
 
     private GitCommandResult fetchOrigin(Path repoPath, boolean forceTags) throws IOException, InterruptedException {
+        return fetchOrigin(repoPath, forceTags, false);
+    }
+
+    private GitCommandResult fetchOrigin(Path repoPath, boolean forceTags, boolean pruneTags) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add("git");
         command.add("fetch");
@@ -365,6 +380,9 @@ final class GitService {
         command.add("--tags");
         if (forceTags) {
             command.add("--force");
+        }
+        if (pruneTags) {
+            command.add("--prune-tags");
         }
         return runChecked(repoPath, command);
     }

@@ -429,6 +429,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     item.put("projectName", project.name);
                     item.put("id", rule.id);
                     item.put("name", rule.name);
+                    item.put("mode", rule.mode);
                     item.put("manualOnly", rule.manualOnly);
                     item.put("reviewRequired", rule.reviewRequired);
                     item.put("schedule", rule.schedule.toMap());
@@ -490,10 +491,16 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             for (RuleConfig rule : project.rules) {
                 RuleRuntimeState state = runtimeStateService.getOrCreate(rule.id);
                 Map<String, Object> ruleItem = new LinkedHashMap<>(rule.toMap());
-                RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
-                ruleItem.put("targetRemoteName", remote.name);
-                ruleItem.put("targetRemoteBaseUrl", remote.baseUrl);
-                ruleItem.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
+                if (rule.isDownloadOnly()) {
+                    ruleItem.put("targetRemoteName", "");
+                    ruleItem.put("targetRemoteBaseUrl", "");
+                    ruleItem.put("targetRemoteUrl", "");
+                } else {
+                    RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+                    ruleItem.put("targetRemoteName", remote.name);
+                    ruleItem.put("targetRemoteBaseUrl", remote.baseUrl);
+                    ruleItem.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
+                }
                 ruleItem.put("lastRunAt", state.lastRunAt);
                 ruleItem.put("lastStatus", state.lastStatus);
                 ruleItem.put("lastRunSource", state.lastRunSource);
@@ -526,8 +533,16 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         ProjectConfig project = selection.project;
         RuleConfig rule = selection.rule;
         SyncJob job = syncJobService.createManualJob(project, rule, forcePush, reviewConfirmed, selectedCommitIds);
-        runtimeStateService.markQueued(rule.id, "manual", "Sync job queued");
-        syncExecutor.submit(() -> runManualSyncJob(job.jobId, forcePush, reviewConfirmed, selectedCommitIds));
+        runtimeStateService.markQueued(rule.id, "manual", rule.isDownloadOnly() ? "Download job queued" : "Sync job queued");
+        try {
+            syncExecutor.submit(() -> runManualSyncJob(job.jobId, forcePush, reviewConfirmed, selectedCommitIds));
+        } catch (RuntimeException exception) {
+            String message = Models.firstNonBlank(exception.getMessage(), "Failed to submit sync job");
+            syncJobService.markFailed(job.jobId, message, runtimeStateService.getOrCreate(rule.id).lastLogPath);
+            runtimeStateService.markFinished(rule.id, "failed", "manual", null,
+                runtimeStateService.getOrCreate(rule.id).lastLogPath, message);
+            throw exception;
+        }
         return job.toMap();
     }
 
@@ -539,10 +554,17 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         try {
             syncJobService.markRunning(jobId);
             Map<String, Object> result = sync(job.ruleId, forcePush, reviewConfirmed, selectedCommitIds, "manual");
-            syncJobService.markSuccess(jobId, Models.nullableString(result.get("logPath")));
-        } catch (Exception exception) {
+            syncJobService.markSuccess(jobId, Models.nullableString(result.get("logPath")),
+                Models.firstNonBlank(Models.nullableString(result.get("message")), "Sync completed"));
+        } catch (Throwable exception) {
             String logPath = runtimeStateService.getOrCreate(job.ruleId).lastLogPath;
-            syncJobService.markFailed(jobId, exception.getMessage(), logPath);
+            String message = Models.firstNonBlank(exception.getMessage(), exception.getClass().getName());
+            syncJobService.markFailed(jobId, message, logPath);
+            try {
+                runtimeStateService.markFinished(job.ruleId, "failed", "manual", null, logPath, message);
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
             exception.printStackTrace();
         }
     }
@@ -573,25 +595,27 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 String nextRun = rule.manualOnly || !rule.schedule.enabled ? null
                     : java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8))
                         .plusMinutes(rule.schedule.intervalMinutes).toString();
-                runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, "Sync completed");
-                diffCacheService.markStale(rule.id, "Sync completed");
+                String message = rule.isDownloadOnly() ? "Download completed" : "Sync completed";
+                runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, message);
+                diffCacheService.markStale(rule.id, message);
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
                 payload.put("projectId", project.id);
                 payload.put("projectName", project.name);
                 payload.put("ruleId", rule.id);
                 payload.put("ruleName", rule.name);
+                payload.put("mode", rule.mode);
                 payload.put("status", "success");
                 payload.put("sourceBranch", rule.sourceBranch);
                 payload.put("localRepoPath", project.displayLocalRepoPath(config));
                 payload.put("targetRemoteId", rule.targetRemoteId);
                 payload.put("targetRepoName", rule.targetRepoName);
                 payload.put("targetBranch", rule.targetBranch);
-                payload.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
+                payload.put("targetRemoteUrl", rule.isDownloadOnly() ? "" : gitService.targetRemoteUrl(config, rule));
                 payload.put("forcePush", forcePush);
                 payload.put("reviewConfirmed", reviewConfirmed);
                 payload.put("selectedCommitIds", selectedCommitIds);
-                payload.put("message", "Sync completed");
+                payload.put("message", message);
                 payload.put("logPath", logPath);
                 return payload;
             } catch (Exception exception) {

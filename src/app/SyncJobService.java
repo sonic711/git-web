@@ -26,13 +26,14 @@ final class SyncJobService {
         job.ruleName = rule.name;
         job.projectId = project.id;
         job.projectName = project.name;
+        job.mode = rule.mode;
         job.triggerSource = "manual";
         job.status = "queued";
         job.forcePush = forcePush;
         job.reviewConfirmed = reviewConfirmed;
         job.selectedCommitIds = new ArrayList<>(selectedCommitIds);
         job.queuedAt = Models.nowIso();
-        job.message = "Sync job queued";
+        job.message = rule.isDownloadOnly() ? "Download job queued" : "Sync job queued";
         jobs.put(job.jobId, job);
         activeManualJobsByRule.put(rule.id, job.jobId);
         return job;
@@ -56,15 +57,19 @@ final class SyncJobService {
         SyncJob job = requireJob(jobId);
         job.status = "running";
         job.startedAt = Models.nowIso();
-        job.message = "Sync running";
+        job.message = RuleConfig.MODE_DOWNLOAD_ONLY.equals(job.mode) ? "Download running" : "Sync running";
     }
 
     void markSuccess(String jobId, String logPath) {
+        markSuccess(jobId, logPath, "Sync completed");
+    }
+
+    void markSuccess(String jobId, String logPath, String message) {
         SyncJob job = requireJob(jobId);
         job.status = "success";
         job.finishedAt = Models.nowIso();
         job.logPath = logPath;
-        job.message = "Sync completed";
+        job.message = message;
         clearActiveManualJob(job);
     }
 

@@ -124,19 +124,25 @@
         <input type="hidden" id="ruleProjectId">
         <input type="hidden" id="ruleId">
         <label>規則名稱<input id="ruleName" required></label>
+        <label>規則模式
+          <select id="ruleMode">
+            <option value="sync">同步到目標 Remote</option>
+            <option value="download-only">只下載到本地</option>
+          </select>
+        </label>
         <label>來源 Branch<input id="sourceBranch" required></label>
-        <label>目標頁籤模板<select id="targetRemoteId" required></select></label>
-        <label>目標專案名稱<input id="targetRepoName" placeholder="project.git" required></label>
-        <div class="preview-box">
+        <label class="sync-only-field">目標頁籤模板<select id="targetRemoteId" required></select></label>
+        <label class="sync-only-field">目標專案名稱<input id="targetRepoName" placeholder="project.git" required></label>
+        <div class="preview-box sync-only-field">
           <div class="preview-label">目標 URL</div>
           <code id="targetUrlPreview">請先選擇 Remote Tab 並輸入專案名稱</code>
         </div>
-        <label>目標 Branch<input id="targetBranch" required></label>
-        <label class="checkbox"><input type="checkbox" id="sameBranchNameExpected">同名分支預設</label>
+        <label class="sync-only-field">目標 Branch<input id="targetBranch" required></label>
+        <label class="checkbox sync-only-field"><input type="checkbox" id="sameBranchNameExpected">同名分支預設</label>
         <label class="checkbox"><input type="checkbox" id="ruleEnabled" checked>啟用規則</label>
-        <label class="checkbox"><input type="checkbox" id="allowForcePush">允許 Force Push</label>
+        <label class="checkbox sync-only-field"><input type="checkbox" id="allowForcePush">允許 Force Push</label>
         <label class="checkbox"><input type="checkbox" id="manualOnly">僅允許手動</label>
-        <label class="checkbox"><input type="checkbox" id="reviewRequired">需要 Review</label>
+        <label class="checkbox sync-only-field"><input type="checkbox" id="reviewRequired">需要 Review</label>
         <label class="checkbox"><input type="checkbox" id="scheduleEnabled">啟用自動同步</label>
         <label>排程分鐘數<input type="number" id="intervalMinutes" min="1" value="30"></label>
         <div class="modal-actions">

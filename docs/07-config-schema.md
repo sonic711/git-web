@@ -42,6 +42,7 @@
         {
           "id": "rule-sit",
           "name": "SIT -> SIT",
+          "mode": "sync",
           "sourceBranch": "sit",
           "targetRemoteId": "target-sit",
           "targetRepoName": "fsap-adm.git",
@@ -55,6 +56,22 @@
             "enabled": true,
             "type": "fixed-interval",
             "intervalMinutes": 1
+          }
+        },
+        {
+          "id": "rule-sit-download",
+          "name": "SIT download only",
+          "mode": "download-only",
+          "sourceBranch": "sit",
+          "sameBranchNameExpected": false,
+          "enabled": true,
+          "allowForcePush": false,
+          "manualOnly": false,
+          "reviewRequired": false,
+          "schedule": {
+            "enabled": true,
+            "type": "fixed-interval",
+            "intervalMinutes": 5
           }
         }
       ]
@@ -110,24 +127,26 @@
   全域唯一，不可重複
 - `name`: `string`
   UI 顯示名稱
+- `mode`: `sync | download-only`
+  規則模式。`sync` 表示下載後推送到目標 remote；`download-only` 表示只下載並對齊本地分支，不推送到其他 remote。`download-only` 會強制同步來源 remote tags，包含 tag 移動與刪除。舊設定若沒有此欄位，預設視為 `sync`
 - `sourceBranch`: `string`
   廠商來源分支
 - `targetRemoteId`: `string`
-  對應 `remotes[*].id`
+  對應 `remotes[*].id`。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `targetRepoName`: `string`
-  目標 repo 名稱，例如 `fsap-adm.git`
+  目標 repo 名稱，例如 `fsap-adm.git`。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `targetBranch`: `string`
-  目標分支
+  目標分支。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `sameBranchNameExpected`: `boolean`
   若為 `true`，UI 建議預設來源與目標同名
 - `enabled`: `boolean`
   規則是否啟用
 - `allowForcePush`: `boolean`
-  是否允許本次同步使用 `git push -f`
+  是否允許本次同步使用 `git push -f`。`mode=download-only` 時忽略
 - `manualOnly`: `boolean`
   是否禁止排程，只允許手動同步
 - `reviewRequired`: `boolean`
-  是否要求同步前先做 commit-based review 並人工確認
+  是否要求同步前先做 commit-based review 並人工確認。`mode=download-only` 時必須為 `false`
 - `schedule`: `object`
   排程設定
 
@@ -165,12 +184,16 @@
 
 1. `id` 不可重複
 2. `sourceBranch` 不可為空
-3. `targetRemoteId` 必須能對應到既有 remote
-4. `targetRepoName` 不可為空，且目前要求以 `.git` 結尾
-5. `targetBranch` 不可為空
-6. `manualOnly=true` 時，`schedule.enabled` 必須為 `false`
-7. `reviewRequired=true` 時，排程仍可保存，但排程同步不得繞過 review gate
-8. `sameBranchNameExpected=true` 不代表必須同名，但 UI 應預設帶入同名值
+3. `mode` 缺漏時預設為 `sync`
+4. `mode` 必須為 `sync` 或 `download-only`
+5. `mode=sync` 時，`targetRemoteId` 必須能對應到既有 remote
+6. `mode=sync` 時，`targetRepoName` 不可為空，且目前要求以 `.git` 結尾
+7. `mode=sync` 時，`targetBranch` 不可為空
+8. `mode=download-only` 時，不需設定 `targetRemoteId`、`targetRepoName`、`targetBranch`
+9. `mode=download-only` 時，`reviewRequired` 必須為 `false`
+10. `manualOnly=true` 時，`schedule.enabled` 必須為 `false`
+11. `reviewRequired=true` 時，排程仍可保存，但排程同步不得繞過 review gate
+12. `sameBranchNameExpected=true` 不代表必須同名，但 UI 應預設帶入同名值
 
 ## Runtime State
 

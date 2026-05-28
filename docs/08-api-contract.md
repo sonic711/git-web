@@ -249,6 +249,7 @@
 {
   "id": "rule-sit",
   "name": "SIT -> SIT",
+  "mode": "sync",
   "sourceBranch": "sit",
   "targetRemoteId": "target-sit",
   "targetRepoName": "fsap-adm.git",
@@ -262,6 +263,27 @@
     "enabled": true,
     "type": "fixed-interval",
     "intervalMinutes": 1
+  }
+}
+```
+
+`download-only` 規則範例：
+
+```json
+{
+  "id": "rule-sit-download",
+  "name": "SIT download only",
+  "mode": "download-only",
+  "sourceBranch": "sit",
+  "sameBranchNameExpected": false,
+  "enabled": true,
+  "allowForcePush": false,
+  "manualOnly": false,
+  "reviewRequired": false,
+  "schedule": {
+    "enabled": true,
+    "type": "fixed-interval",
+    "intervalMinutes": 5
   }
 }
 ```
@@ -389,8 +411,9 @@
 
 用途：
 
-- 建立一筆手動同步背景 job
-- 可做整支 branch 同步，也可用 `selectedCommitIds` 做 commit-based sync
+- 建立一筆手動背景 job
+- `mode=sync` 可做整支 branch 同步，也可用 `selectedCommitIds` 做 commit-based sync
+- `mode=download-only` 只會下載並對齊本地來源分支，不會 push 到目標 remote；本地 tags 會強制同步為來源 remote tags
 
 請求範例：
 
@@ -404,16 +427,20 @@
 
 規則：
 
-1. 若 `allowForcePush=false`，不得接受 `forcePush=true`
-2. 若 `reviewRequired=true`，不得接受 `reviewConfirmed=false`
-3. 若 `reviewRequired=true`，目前要求 `selectedCommitIds` 不可為空
-4. 若同步來源為排程，後端不得對 `manualOnly=true` 的規則執行
-5. 若帶入 `selectedCommitIds`，後端以目標 branch 為基準建立暫時分支並 `cherry-pick` 這批 commit
-6. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
-7. branch push 成功後，後端會將該 repo 的 tags 一併 push 到目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
-8. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
-9. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
-10. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求
+1. `mode` 缺漏時視為 `sync`
+2. `mode=download-only` 時忽略 `forcePush`、`reviewConfirmed` 與 `selectedCommitIds`
+3. `mode=sync` 且 `allowForcePush=false` 時，不得接受 `forcePush=true`
+4. `mode=sync` 且 `reviewRequired=true` 時，不得接受 `reviewConfirmed=false`
+5. `mode=sync` 且 `reviewRequired=true` 時，目前要求 `selectedCommitIds` 不可為空
+6. 若同步來源為排程，後端不得對 `manualOnly=true` 的規則執行
+7. `mode=sync` 且帶入 `selectedCommitIds` 時，後端以目標 branch 為基準建立暫時分支並 `cherry-pick` 這批 commit
+8. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
+9. `mode=sync` 時，branch push 成功後，後端會將該 repo 的 tags 一併 push 到目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
+10. `mode=download-only` 時，不得建立或更新 target remote，也不得執行任何 push
+11. `mode=download-only` 時，後端需以 `git fetch origin --prune --tags --force --prune-tags` 同步來源，讓本地 tags 包含移動與刪除都與來源 remote 一致
+12. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止
+13. 目前 API 不提供互動式衝突解決，也不保證單一 commit 可獨立同步
+14. 若同一筆 rule 已有 `queued` 或 `running` 的手動同步 job，後端可拒絕新的手動同步請求
 
 commit-based sync 錯誤情境：
 

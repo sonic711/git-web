@@ -21,6 +21,7 @@
         {
           "id": "rule-sit",
           "name": "SIT -> SIT",
+          "mode": "sync",
           "sourceBranch": "sit",
           "targetRemoteId": "target-sit",
           "targetRepoName": "fsap-adm.git",
@@ -34,6 +35,22 @@
             "enabled": true,
             "type": "fixed-interval",
             "intervalMinutes": 1
+          }
+        },
+        {
+          "id": "rule-sit-download",
+          "name": "SIT download only",
+          "mode": "download-only",
+          "sourceBranch": "sit",
+          "sameBranchNameExpected": false,
+          "enabled": true,
+          "allowForcePush": false,
+          "manualOnly": false,
+          "reviewRequired": false,
+          "schedule": {
+            "enabled": false,
+            "type": "fixed-interval",
+            "intervalMinutes": 5
           }
         }
       ]

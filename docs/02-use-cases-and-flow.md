@@ -51,7 +51,29 @@
 - 錯誤訊息難以對應
 - log 難以追查
 
-## 情境 5：複製設定檔到另一台機器
+## 情境 5：只下載來源分支到本地
+
+使用者建立一筆 `mode=download-only` 規則：
+
+- 廠商 repo：`https://vendor.example.com/project.git`
+- 本地主目錄：`D:/git-workspace`
+- 本地專案資料夾：`vendor-project`
+- 來源 branch：`SIT`
+- 不設定目標 remote
+- 不設定目標 branch
+
+執行時：
+
+1. 系統檢查實際 repo 路徑是否存在有效 Git repo。
+2. 若不存在，先從廠商 repo clone 到指定目錄。
+3. 執行 `git fetch origin --prune --tags --force --prune-tags`，讓本地 tags 與來源 remote tags 完全對齊。
+4. 將本地 `SIT` 強制對齊 `origin/SIT`。
+5. 執行 `git pull --ff-only origin SIT`。
+6. 結束並寫入 log，不執行任何 target remote 或 push。
+
+此模式可手動執行，也可排程執行。
+
+## 情境 6：複製設定檔到另一台機器
 
 使用者希望把既有規則交給另一位同事使用時，系統應支援：
 
@@ -59,16 +81,16 @@
 2. 同事只需複製設定檔到指定目錄即可載入。
 3. 本機執行狀態與 log 不應影響主設定檔的可攜性。
 
-## 情境 6：排程自動同步多個專案
+## 情境 7：排程自動同步或下載多個專案
 
 使用者設定多個專案與多筆 rule 排程後，系統應可：
 
 1. 在背景定時檢查可執行的排程。
-2. 逐筆觸發對應 rule 的同步。
+2. 逐筆觸發對應 rule 的同步或下載。
 3. 為每次排程執行留下 log 與結果。
 4. 避免同一筆排程在尚未完成時重複啟動。
 
-## 情境 7：禁止排程且需 review 後手動同步
+## 情境 8：禁止排程且需 review 後手動同步
 
 某些分支例如 `UAT`，使用者希望：
 
@@ -82,7 +104,7 @@
 - `manualOnly=true`
 - `reviewRequired=true`
 
-## 情境 8：在 UI 修改設定並寫回設定檔
+## 情境 9：在 UI 修改設定並寫回設定檔
 
 使用者可在 UI 中直接修改：
 
@@ -117,6 +139,21 @@
 13. 依 checkbox 狀態決定一般 push 或 `push -f`。
 14. 若 rule 啟用 review gate，先檢查是否已完成人工確認。
 15. 寫入 log 並更新 job / runtime state。
+
+## 只下載標準流程
+
+1. 使用者在列表頁選擇一筆 `mode=download-only` 的 rule。
+2. UI 呼叫本機 Java API 建立背景 job。
+3. Java API 立即回傳 `jobId` 與 `queued` 狀態。
+4. 背景 worker 載入設定檔。
+5. 系統檢查實際 repo 路徑是否已有 repo。
+6. 若沒有 repo，執行 clone。
+7. 若已有 repo，驗證該目錄為有效 Git repo。
+8. 執行 `git fetch origin --prune --tags --force --prune-tags`，讓本地 tags 與來源 remote tags 完全對齊。
+9. 驗證 `origin/<sourceBranch>` 存在。
+10. 將本地來源分支對齊 `origin/<sourceBranch>`。
+11. 執行 `git pull --ff-only origin <sourceBranch>`。
+12. 寫入 log 並更新 job / runtime state。
 
 ## Review Gate 流程
 

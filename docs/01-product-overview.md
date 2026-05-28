@@ -7,8 +7,9 @@
 目前需求包含兩個主軸：
 
 1. 手動將廠商 repo 的指定 branch，同步到使用者設定的目標 remote / branch。
-2. 讓多個專案可依排程自動推送到各自設定的目標 remote。
-3. 允許使用者在 UI 上隨時修改同步規則、排程、remote 與分支設定，並將結果寫回可攜式設定檔。
+2. 將廠商 repo 的指定 branch 下載並對齊到本地工作目錄，不推送到其他 remote。
+3. 讓多個專案可依排程自動推送到各自設定的目標 remote，或自動下載到本地。
+4. 允許使用者在 UI 上隨時修改同步規則、排程、remote 與分支設定，並將結果寫回可攜式設定檔。
 
 ## 已確認需求
 
@@ -19,6 +20,9 @@
 - 若本機指定目錄尚未存在 repo，系統需先 `clone`。
 - 若本機指定目錄已存在 repo，系統需直接使用該 repo 並進行 `fetch`。
 - 使用者可透過 `checkbox` 決定同步時是否加上 `git push -f`。
+- rule 支援 `mode`，目前包含 `sync` 與 `download-only`。
+- `sync` 模式會從來源下載到本地後，再推送到目標 remote。
+- `download-only` 模式只會從來源下載並對齊本地分支，不推送到任何目標 remote，且會強制同步來源 remote tags，包含 tag 移動與刪除。
 - 每次同步按鈕只提交一筆 rule，但手動同步應以背景 job 方式執行，不阻塞 UI。
 - 同步 branch 時，系統也應將來源 repo 的 tags 一併推送到目標 remote；一般同步只新增不存在的 tags，勾選 `Force Push` 時才允許移動既有 tags。
 - 第一版以單人使用為主。
@@ -33,10 +37,10 @@
 
 1. 管理廠商 repo 設定。
 2. 管理目標 remote 設定。
-3. 管理專案底下的來源 branch 與目標 branch 規則。
+3. 管理專案底下的 rule，包含同步到目標 remote 與只下載到本地兩種模式。
 4. 檢查本機目錄是否已有指定 repo。
 5. 在需要時自動 clone 專案。
-6. 提交單筆 rule 同步 job。
+6. 提交單筆 rule 的同步或下載 job。
 7. 顯示同步結果與執行紀錄。
 8. 以單一主設定檔保存全局主目錄、remotes、projects、rules 與排程設定。
 9. 在 UI 中編輯並保存 remotes、projects、rules 與排程設定。

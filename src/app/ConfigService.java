@@ -74,7 +74,8 @@ final class ConfigService {
         AppConfig config = current;
         for (ProjectConfig project : config.projects) {
             for (RuleConfig rule : project.rules) {
-                Models.require(!rule.targetRemoteId.equals(remoteId), "Remote is still used by rule: " + rule.id);
+                Models.require(rule.isDownloadOnly() || !remoteId.equals(rule.targetRemoteId),
+                    "Remote is still used by rule: " + rule.id);
             }
         }
         config.remotes.removeIf(remote -> remote.id.equals(remoteId));
@@ -199,10 +200,15 @@ final class ConfigService {
             });
             mergedProject.enabled = mergedProject.enabled || project.enabled;
             for (RuleConfig rule : project.rules) {
-                if (rule.name == null || rule.name.isBlank()) {
-                    rule.name = rule.sourceBranch + " -> " + rule.targetBranch;
+                if (rule.mode == null || rule.mode.isBlank()) {
+                    rule.mode = RuleConfig.MODE_SYNC;
                 }
-                if (rule.targetRepoName == null || rule.targetRepoName.isBlank()) {
+                if (rule.name == null || rule.name.isBlank()) {
+                    rule.name = rule.isDownloadOnly()
+                        ? rule.sourceBranch + " download only"
+                        : rule.sourceBranch + " -> " + rule.targetBranch;
+                }
+                if (rule.isSyncMode() && (rule.targetRepoName == null || rule.targetRepoName.isBlank())) {
                     RemoteConfig remote = config.remotes.stream()
                         .filter(item -> item.id.equals(rule.targetRemoteId))
                         .findFirst()
@@ -248,11 +254,17 @@ final class ConfigService {
                 Models.require(rule.id != null && !rule.id.isBlank(), "rule id is required");
                 Models.require(ruleIds.add(rule.id), "duplicate rule id: " + rule.id);
                 Models.require(rule.name != null && !rule.name.isBlank(), "rule name is required");
+                Models.require(RuleConfig.MODE_SYNC.equals(rule.mode) || RuleConfig.MODE_DOWNLOAD_ONLY.equals(rule.mode),
+                    "rule mode must be sync or download-only");
                 Models.require(rule.sourceBranch != null && !rule.sourceBranch.isBlank(), "sourceBranch is required");
-                Models.require(rule.targetRepoName != null && !rule.targetRepoName.isBlank(), "targetRepoName is required");
-                Models.require(rule.targetRepoName.endsWith(".git"), "targetRepoName must end with .git");
-                Models.require(rule.targetBranch != null && !rule.targetBranch.isBlank(), "targetBranch is required");
-                Models.require(remoteIds.contains(rule.targetRemoteId), "targetRemoteId does not exist: " + rule.targetRemoteId);
+                if (rule.isSyncMode()) {
+                    Models.require(rule.targetRepoName != null && !rule.targetRepoName.isBlank(), "targetRepoName is required");
+                    Models.require(rule.targetRepoName.endsWith(".git"), "targetRepoName must end with .git");
+                    Models.require(rule.targetBranch != null && !rule.targetBranch.isBlank(), "targetBranch is required");
+                    Models.require(remoteIds.contains(rule.targetRemoteId), "targetRemoteId does not exist: " + rule.targetRemoteId);
+                } else {
+                    Models.require(!rule.reviewRequired, "download-only rules must not require review");
+                }
                 Models.require(rule.schedule.intervalMinutes > 0, "intervalMinutes must be > 0");
                 if (rule.manualOnly) {
                     Models.require(!rule.schedule.enabled, "manualOnly rules must not enable schedule");

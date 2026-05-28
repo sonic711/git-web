@@ -82,6 +82,14 @@ function selectedCommitIdsFor(ruleId) {
   return state.reviewSelections[ruleId]?.selectedCommitIds || [];
 }
 
+function ruleMode(rule) {
+  return rule?.mode || 'sync';
+}
+
+function isDownloadOnlyRule(rule) {
+  return ruleMode(rule) === 'download-only';
+}
+
 function openModal(id) {
   document.getElementById(id).classList.remove('hidden');
   document.body.classList.add('modal-open');
@@ -168,6 +176,7 @@ function toggleProjectCollapse(projectId) {
 }
 
 function renderRuleRow(project, rule) {
+  const downloadOnly = isDownloadOnlyRule(rule);
   const displayStatus = rule.currentJobStatus || rule.lastStatus || 'never';
   const displayTime = rule.currentJobStartedAt || rule.currentJobQueuedAt || rule.lastRunAt;
   const displaySource = rule.currentJobTriggerSource || rule.lastRunSource;
@@ -178,30 +187,33 @@ function renderRuleRow(project, rule) {
     : displayStatus === 'queued' ? 'queued' : '';
   const reviewReady = isReviewReady(rule.id);
   const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
-  const syncDisabled = !!rule.currentJobStatus || (rule.reviewRequired && !reviewReady);
+  const syncDisabled = !!rule.currentJobStatus || (!downloadOnly && rule.reviewRequired && !reviewReady);
   const syncLabel = rule.currentJobStatus === 'queued' ? '排隊中'
     : rule.currentJobStatus === 'running' ? '同步中'
-    : '同步';
+    : downloadOnly ? '下載' : '同步';
+  const branchText = downloadOnly
+    ? `<code>${escapeHtml(rule.sourceBranch)}</code> -> <code>本地</code>`
+    : `<code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code>`;
+  const targetText = downloadOnly
+    ? `<strong>只下載到本地</strong><span>${escapeHtml(project.localRepoPath || '')}</span>`
+    : `<strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong><span>${escapeHtml(rule.targetRepoName)}</span>`;
   return `
     <tr>
       <td>
         <div class="stacked-copy">
           <strong>${escapeHtml(rule.name)}</strong>
-          <span>${rule.manualOnly ? '<span class="tag">Manual Only</span>' : ''}${rule.schedule?.enabled ? '<span class="tag">Auto Sync</span>' : ''}</span>
+          <span>${downloadOnly ? '<span class="tag">Download Only</span>' : ''}${rule.manualOnly ? '<span class="tag">Manual Only</span>' : ''}${rule.schedule?.enabled ? '<span class="tag">Auto Sync</span>' : ''}</span>
         </div>
       </td>
       <td>
         <div class="stacked-copy">
-          <span><code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code></span>
-          <span>${rule.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}</span>
-          <span>${selectedCommitCount ? `<span class="tag success">${selectedCommitCount} commits</span>` : ''}</span>
+          <span>${branchText}</span>
+          <span>${!downloadOnly && rule.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}</span>
+          <span>${!downloadOnly && selectedCommitCount ? `<span class="tag success">${selectedCommitCount} commits</span>` : ''}</span>
         </div>
       </td>
       <td>
-        <div class="stacked-copy">
-          <strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong>
-          <span>${escapeHtml(rule.targetRepoName)}</span>
-        </div>
+        <div class="stacked-copy">${targetText}</div>
       </td>
       <td>
         <span class="tag ${statusClass}">${escapeHtml(displayStatus)}</span>
@@ -214,7 +226,7 @@ function renderRuleRow(project, rule) {
         <div class="row-controls">
           <label class="mini-check">
             <input type="checkbox"
-              ${rule.allowForcePush ? '' : 'disabled'}
+              ${rule.allowForcePush && !downloadOnly ? '' : 'disabled'}
               ${state.rowForcePush[rule.id] ? 'checked' : ''}
               onchange="setRowForcePush('${escapeAttr(rule.id)}', this.checked)">
             Force Push
@@ -228,7 +240,7 @@ function renderRuleRow(project, rule) {
           </label>
           <div class="inline-actions">
             <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯</button>
-            <button class="secondary" onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
+            <button class="secondary" ${downloadOnly ? 'disabled' : ''} onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
             <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">${syncLabel}</button>
             <button class="secondary" onclick="validateRule('${escapeAttr(rule.id)}')">驗證</button>
             <button class="secondary" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除</button>
@@ -310,6 +322,11 @@ function updateLocalRepoPathPreview() {
 }
 
 function updateTargetUrlPreview() {
+  const mode = document.getElementById('ruleMode')?.value || 'sync';
+  if (mode === 'download-only') {
+    document.getElementById('targetUrlPreview').textContent = '只下載到本地，不推送到目標 remote';
+    return;
+  }
   const remote = remoteById(document.getElementById('targetRemoteId').value);
   const repoName = document.getElementById('targetRepoName').value.trim();
   const preview = document.getElementById('targetUrlPreview');
@@ -368,17 +385,41 @@ function syncProjectFormRules() {
 }
 
 function syncRuleFormRules() {
+  const mode = document.getElementById('ruleMode').value || 'sync';
+  const downloadOnly = mode === 'download-only';
   const sameBranch = document.getElementById('sameBranchNameExpected').checked;
   const manualOnly = document.getElementById('manualOnly').checked;
   const sourceBranch = document.getElementById('sourceBranch').value;
   const targetBranch = document.getElementById('targetBranch');
   const scheduleEnabled = document.getElementById('scheduleEnabled');
   const ruleName = document.getElementById('ruleName');
-  if (sameBranch && sourceBranch) {
+  const targetRemoteId = document.getElementById('targetRemoteId');
+  const targetRepoName = document.getElementById('targetRepoName');
+  const sameBranchInput = document.getElementById('sameBranchNameExpected');
+  const allowForcePush = document.getElementById('allowForcePush');
+  const reviewRequired = document.getElementById('reviewRequired');
+  document.querySelectorAll('.sync-only-field').forEach(element => {
+    element.classList.toggle('hidden', downloadOnly);
+  });
+  targetRemoteId.disabled = downloadOnly;
+  targetRemoteId.required = !downloadOnly;
+  targetRepoName.disabled = downloadOnly;
+  targetRepoName.required = !downloadOnly;
+  targetBranch.disabled = downloadOnly;
+  targetBranch.required = !downloadOnly;
+  sameBranchInput.disabled = downloadOnly;
+  allowForcePush.disabled = downloadOnly;
+  reviewRequired.disabled = downloadOnly;
+  if (downloadOnly) {
+    sameBranchInput.checked = false;
+    allowForcePush.checked = false;
+    reviewRequired.checked = false;
+  }
+  if (!downloadOnly && sameBranch && sourceBranch) {
     targetBranch.value = sourceBranch;
   }
   if (!ruleName.value.trim() && sourceBranch.trim()) {
-    ruleName.value = `${sourceBranch} -> ${targetBranch.value || sourceBranch}`;
+    ruleName.value = downloadOnly ? `${sourceBranch} download only` : `${sourceBranch} -> ${targetBranch.value || sourceBranch}`;
   }
   scheduleEnabled.disabled = manualOnly;
   if (manualOnly) {
@@ -414,6 +455,7 @@ function newRule(projectId) {
   document.getElementById('ruleForm').reset();
   document.getElementById('ruleProjectId').value = projectId;
   document.getElementById('ruleId').value = '';
+  document.getElementById('ruleMode').value = 'sync';
   document.getElementById('ruleEnabled').checked = true;
   document.getElementById('intervalMinutes').value = 30;
   const project = projectById(projectId);
@@ -435,10 +477,11 @@ function editRule(projectId, ruleId) {
   document.getElementById('ruleProjectId').value = projectId || project.id;
   document.getElementById('ruleId').value = rule.id;
   document.getElementById('ruleName').value = rule.name;
+  document.getElementById('ruleMode').value = ruleMode(rule);
   document.getElementById('sourceBranch').value = rule.sourceBranch;
-  document.getElementById('targetRemoteId').value = rule.targetRemoteId;
-  document.getElementById('targetRepoName').value = rule.targetRepoName;
-  document.getElementById('targetBranch').value = rule.targetBranch;
+  document.getElementById('targetRemoteId').value = rule.targetRemoteId || '';
+  document.getElementById('targetRepoName').value = rule.targetRepoName || '';
+  document.getElementById('targetBranch').value = rule.targetBranch || '';
   document.getElementById('sameBranchNameExpected').checked = !!rule.sameBranchNameExpected;
   document.getElementById('ruleEnabled').checked = !!rule.enabled;
   document.getElementById('allowForcePush').checked = !!rule.allowForcePush;
@@ -604,18 +647,21 @@ async function saveRule(event) {
   try {
     const projectId = document.getElementById('ruleProjectId').value;
     const ruleId = document.getElementById('ruleId').value || ModelsId.rule();
+    const mode = document.getElementById('ruleMode').value || 'sync';
+    const downloadOnly = mode === 'download-only';
     const payload = {
       id: ruleId,
       name: document.getElementById('ruleName').value,
+      mode,
       sourceBranch: document.getElementById('sourceBranch').value,
-      targetRemoteId: document.getElementById('targetRemoteId').value,
-      targetRepoName: document.getElementById('targetRepoName').value,
-      targetBranch: document.getElementById('targetBranch').value,
-      sameBranchNameExpected: document.getElementById('sameBranchNameExpected').checked,
+      targetRemoteId: downloadOnly ? '' : document.getElementById('targetRemoteId').value,
+      targetRepoName: downloadOnly ? '' : document.getElementById('targetRepoName').value,
+      targetBranch: downloadOnly ? '' : document.getElementById('targetBranch').value,
+      sameBranchNameExpected: !downloadOnly && document.getElementById('sameBranchNameExpected').checked,
       enabled: document.getElementById('ruleEnabled').checked,
-      allowForcePush: document.getElementById('allowForcePush').checked,
+      allowForcePush: !downloadOnly && document.getElementById('allowForcePush').checked,
       manualOnly: document.getElementById('manualOnly').checked,
-      reviewRequired: document.getElementById('reviewRequired').checked,
+      reviewRequired: !downloadOnly && document.getElementById('reviewRequired').checked,
       schedule: {
         enabled: document.getElementById('scheduleEnabled').checked,
         type: 'fixed-interval',
@@ -704,6 +750,10 @@ async function validateRule(ruleId) {
 
 async function showDiff(ruleId) {
   try {
+    const selection = ruleSelection(ruleId);
+    if (selection && isDownloadOnlyRule(selection.rule)) {
+      throw new Error('只下載規則沒有目標 remote，無法查看差異');
+    }
     state.reviewSelections[ruleId] = { confirmed: false, selectedCommitIds: [] };
     const popup = window.open(`/diff.html?ruleId=${encodeURIComponent(ruleId)}`, `diff-review-${ruleId}`,
       'popup=yes,width=1480,height=960,resizable=yes,scrollbars=yes');
@@ -736,16 +786,17 @@ async function runSync(ruleId) {
     if (selection.rule.currentJobStatus) {
       throw new Error('這筆規則已有進行中的手動同步 job');
     }
-    const forcePush = !!state.rowForcePush[ruleId] && !!selection.rule.allowForcePush;
-    const reviewConfirmed = !selection.rule.reviewRequired || isReviewReady(ruleId);
-    const selectedCommitIds = selection.rule.reviewRequired ? selectedCommitIdsFor(ruleId) : [];
-    if (selection.rule.reviewRequired && !reviewConfirmed) {
+    const downloadOnly = isDownloadOnlyRule(selection.rule);
+    const forcePush = !downloadOnly && !!state.rowForcePush[ruleId] && !!selection.rule.allowForcePush;
+    const reviewConfirmed = downloadOnly || !selection.rule.reviewRequired || isReviewReady(ruleId);
+    const selectedCommitIds = !downloadOnly && selection.rule.reviewRequired ? selectedCommitIdsFor(ruleId) : [];
+    if (!downloadOnly && selection.rule.reviewRequired && !reviewConfirmed) {
       throw new Error('這筆規則需要先查看差異並完成人工確認');
     }
-    if (selection.rule.reviewRequired && !selectedCommitIds.length) {
+    if (!downloadOnly && selection.rule.reviewRequired && !selectedCommitIds.length) {
       throw new Error('請先在查看差異畫面中選擇至少一筆 commit');
     }
-    const result = await withLoading('提交同步工作中...', () =>
+    const result = await withLoading(downloadOnly ? '提交下載工作中...' : '提交同步工作中...', () =>
       api(`/api/rules/${ruleId}/sync`, {
         method: 'POST',
         body: JSON.stringify({ forcePush, reviewConfirmed, selectedCommitIds }),
@@ -756,7 +807,7 @@ async function runSync(ruleId) {
     if (result.jobId) {
       trackSyncJob(result.jobId);
     }
-    showToast(result.message || '同步工作已排入佇列', 'success');
+    showToast(result.message || (downloadOnly ? '下載工作已排入佇列' : '同步工作已排入佇列'), 'success');
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -868,6 +919,7 @@ function stripRuntimeFieldsFromRule(rule) {
   return {
     id: rule.id,
     name: rule.name,
+    mode: ruleMode(rule),
     sourceBranch: rule.sourceBranch,
     targetRemoteId: rule.targetRemoteId,
     targetRepoName: rule.targetRepoName,
@@ -920,6 +972,7 @@ document.getElementById('globalWorkspaceRoot').addEventListener('input', () => {
   updateLocalRepoPathPreview();
 });
 document.getElementById('localProjectName').addEventListener('input', updateLocalRepoPathPreview);
+document.getElementById('ruleMode').addEventListener('change', syncRuleFormRules);
 document.getElementById('sameBranchNameExpected').addEventListener('change', syncRuleFormRules);
 document.getElementById('sourceBranch').addEventListener('input', syncRuleFormRules);
 document.getElementById('manualOnly').addEventListener('change', syncRuleFormRules);

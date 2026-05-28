@@ -47,6 +47,8 @@
 - 同步前需先將本地 `sourceBranch` 強制對齊廠商 `origin/<sourceBranch>`，再執行 `git pull --ff-only`。
 - 所有會呼叫後端 API 的按鈕操作都需顯示全畫面 loading overlay。
 - 設定模型已從扁平 `mappings` 重構成 `projects[*].rules[*]`。
+- rule 已支援 `mode` 欄位，目前包含 `sync` 與 `download-only`；舊設定缺漏時預設為 `sync`。
+- `download-only` 模式只從廠商 repo 下載並對齊本地來源分支，不建立 target remote，也不 push 到其他 remote；此模式會強制同步來源 remote tags，包含 tag 移動與刪除，但不支援差異 review、Force Push 或 target tags push。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
 - Settings 的 `選資料夾` 應優先使用可見於前景的目錄選擇視窗；macOS 用原生視窗，Windows fallback 也不得用無 owner 的 chooser，且未儲存前不得被背景自動刷新覆寫欄位內容。
@@ -98,6 +100,8 @@
 - sameBranchNameExpected
 - remote baseUrl
 - rule targetRepoName
+- rule mode
+- download-only rule 不需 targetRemoteId、targetRepoName、targetBranch
 
 本機執行狀態檔保存：
 
@@ -181,3 +185,4 @@
 - 已實作手動同步背景 job：手動同步 API 立即回 `jobId`，不同 repo 可並行，同 rule 若已有 `queued / running` job 則拒絕重複提交。
 - `queued` 狀態也視為暫時占用中，避免同一筆 rule 的排程同步在手動 job 尚未開始時插隊。
 - 已調整同步流程：branch push 成功後會再 push tags；一般同步只新增不存在的 tags，Force Push 會先 force-fetch 來源 tags 並 force-push tags 到目標 remote。
+- 已實作 `download-only` rule mode：UI 可選「只下載到本地」，後端只 clone/fetch/reset/pull 來源分支，不建立 target remote，也不執行 push；fetch 來源時使用 `--force --prune-tags` 讓本地 tags 與來源 remote tags 對齊。

@@ -76,6 +76,7 @@
 
 - 執行單筆 rule 同步
 - 支援整支 branch 同步與 commit-based 同步兩種模式
+- 支援 `download-only` 模式，只下載並對齊本地來源分支，不建立 target remote，也不 push；此模式需強制同步來源 remote tags，包含 tag 移動與刪除
 - 驗證 `allowForcePush`
 - 驗證 `manualOnly`
 - 驗證 `reviewRequired`
@@ -166,6 +167,7 @@
 
 - `String id`
 - `String name`
+- `String mode`
 - `String sourceBranch`
 - `String targetRemoteId`
 - `String targetRepoName`
@@ -176,6 +178,13 @@
 - `boolean manualOnly`
 - `boolean reviewRequired`
 - `ScheduleConfig schedule`
+
+`mode` 目前允許：
+
+- `sync`
+- `download-only`
+
+舊設定若沒有 `mode`，預設視為 `sync`。
 
 ### `ScheduleConfig`
 

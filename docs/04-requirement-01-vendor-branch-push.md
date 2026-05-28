@@ -4,6 +4,8 @@
 
 系統必須支援將廠商 repo 的指定 branch，推送到使用者所設定的目標 remote / branch。
 
+此需求適用於 `mode=sync` 的 rule。`mode=download-only` 只下載到本地，不適用本文件中的目標 remote 必填規則。
+
 範例：
 
 - 廠商 `SIT` 分支 -> 目標 remote A 的 `SIT`

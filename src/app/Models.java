@@ -171,8 +171,12 @@ final class Models {
     }
 
     static final class RuleConfig {
+        static final String MODE_SYNC = "sync";
+        static final String MODE_DOWNLOAD_ONLY = "download-only";
+
         String id;
         String name;
+        String mode = MODE_SYNC;
         String sourceBranch;
         String targetRemoteId;
         String targetRepoName;
@@ -188,10 +192,11 @@ final class Models {
             RuleConfig config = new RuleConfig();
             config.id = stringValue(map.get("id"));
             config.name = stringValue(map.getOrDefault("name", map.get("id")));
+            config.mode = firstNonBlank(nullableString(map.get("mode")), MODE_SYNC);
             config.sourceBranch = stringValue(map.get("sourceBranch"));
-            config.targetRemoteId = stringValue(map.get("targetRemoteId"));
+            config.targetRemoteId = nullableString(map.get("targetRemoteId"));
             config.targetRepoName = nullableString(map.get("targetRepoName"));
-            config.targetBranch = stringValue(map.get("targetBranch"));
+            config.targetBranch = nullableString(map.get("targetBranch"));
             config.sameBranchNameExpected = booleanValue(map.getOrDefault("sameBranchNameExpected", Boolean.FALSE));
             config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
             config.allowForcePush = booleanValue(map.getOrDefault("allowForcePush", Boolean.FALSE));
@@ -208,6 +213,7 @@ final class Models {
             RuleConfig rule = new RuleConfig();
             rule.id = legacy.id;
             rule.name = firstNonBlank(legacy.ruleName, legacy.sourceBranch + " -> " + legacy.targetBranch, legacy.id);
+            rule.mode = MODE_SYNC;
             rule.sourceBranch = legacy.sourceBranch;
             rule.targetRemoteId = legacy.targetRemoteId;
             rule.targetRepoName = legacy.targetRepoName;
@@ -225,6 +231,7 @@ final class Models {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", id);
             map.put("name", name);
+            map.put("mode", mode);
             map.put("sourceBranch", sourceBranch);
             map.put("targetRemoteId", targetRemoteId);
             map.put("targetRepoName", targetRepoName);
@@ -236,6 +243,14 @@ final class Models {
             map.put("reviewRequired", reviewRequired);
             map.put("schedule", schedule.toMap());
             return map;
+        }
+
+        boolean isDownloadOnly() {
+            return MODE_DOWNLOAD_ONLY.equals(mode);
+        }
+
+        boolean isSyncMode() {
+            return MODE_SYNC.equals(mode) || mode == null || mode.isBlank();
         }
     }
 
@@ -366,21 +381,22 @@ final class Models {
     }
 
     static final class SyncJob {
-        String jobId;
-        String ruleId;
-        String ruleName;
-        String projectId;
-        String projectName;
-        String triggerSource;
-        String status;
-        boolean forcePush;
-        boolean reviewConfirmed;
-        List<String> selectedCommitIds = new ArrayList<>();
-        String queuedAt;
-        String startedAt;
-        String finishedAt;
-        String message;
-        String logPath;
+        volatile String jobId;
+        volatile String ruleId;
+        volatile String ruleName;
+        volatile String projectId;
+        volatile String projectName;
+        volatile String mode;
+        volatile String triggerSource;
+        volatile String status;
+        volatile boolean forcePush;
+        volatile boolean reviewConfirmed;
+        volatile List<String> selectedCommitIds = new ArrayList<>();
+        volatile String queuedAt;
+        volatile String startedAt;
+        volatile String finishedAt;
+        volatile String message;
+        volatile String logPath;
 
         Map<String, Object> toMap() {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -389,6 +405,7 @@ final class Models {
             map.put("ruleName", ruleName);
             map.put("projectId", projectId);
             map.put("projectName", projectName);
+            map.put("mode", mode);
             map.put("triggerSource", triggerSource);
             map.put("status", status);
             map.put("forcePush", forcePush);
