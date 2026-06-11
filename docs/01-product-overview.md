@@ -35,7 +35,7 @@
 - 使用者可在 UI 修改 `是否自動同步`、`remote URL`、`來源/目標分支` 等設定，且修改結果必須寫回主設定檔。
 - sync 規則需提供版本一致性比對；commit hash 用於判斷 HEAD / 歷程位置，tree hash 用於判斷程式內容。
 - commit hash 不同但 tree hash 相同時，應顯示「內容一致，歷程不同」，不可誤判為程式版本不同。
-- Projects 列表需支援規則篩選，第一版包含關鍵字、Remote Tab、執行方式、最後狀態與只顯示異常。
+- Projects 列表需支援規則篩選，包含關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常。
 - 篩選條件屬於本機 UI 偏好，只保存於瀏覽器，不得寫入或匯出 `config/settings.json`。
 
 ## 需求範圍

@@ -51,7 +51,7 @@
 - `download-only` 模式只從廠商 repo 下載並對齊本地來源分支，不建立 target remote，也不 push 到其他 remote；此模式會強制同步來源 remote tags，包含 tag 移動與刪除，但不支援差異 review、Force Push 或 target tags push。
 - `download-only` rule 可選填 `downloadWorkspaceRoot` 覆寫下載主目錄；未設定時使用全域 `localWorkspaceRoot`。此欄位屬於本機路徑，匯出設定檔時會移除。
 - sync rule 的版本一致性需同時比較 commit hash 與 tree hash；tree 相同代表程式內容一致，即使 cherry-pick 造成 commit hash 不同。
-- Projects 列表已新增規則篩選列，包含關鍵字、Remote Tab、執行方式、最後狀態與只顯示異常。
+- Projects 列表已新增規則篩選列，包含關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常。
 - 規則篩選屬於本機 UI 偏好，保存於瀏覽器 `localStorage`，不得寫入或匯出主設定檔。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
@@ -195,5 +195,5 @@
 - 已實作 `download-only` rule mode：UI 可選「只下載到本地」，後端只 clone/fetch/reset/pull 來源分支，不建立 target remote，也不執行 push；fetch 來源時使用 `--force --prune-tags` 讓本地 tags 與來源 remote tags 對齊。
 - 已實作手動版本一致性比對：sync rule 可比較來源與目標的 commit hash、tree hash 與雙方獨有 commit 數量，並判定 `IDENTICAL`、`CONTENT_IDENTICAL`、`DIFFERENT`、`TARGET_MISSING` 或 `CHECK_FAILED`。
 - UI 已新增 `版本比對` 操作與結果視窗；只有 `DIFFERENT` 狀態可直接進入既有差異檢視流程，完整執行結果會寫入當日 log。
-- 已實作 Projects 規則篩選：支援關鍵字、Remote Tab、執行方式、最後狀態與只顯示異常，條件採 AND，偏好保存於瀏覽器 `localStorage`。
+- 已實作 Projects 規則篩選：支援關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常，條件採 AND，偏好保存於瀏覽器 `localStorage`。
 - 篩選期間符合的專案會強制展開且收合按鈕 disabled，清除篩選後恢復原本收合狀態；規則與 Remote 表格在窄螢幕改為容器內水平捲動。

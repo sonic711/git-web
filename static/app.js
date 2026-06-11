@@ -2,6 +2,7 @@ const RULE_FILTER_STORAGE_KEY = 'git-web.rule-filters.v1';
 const DEFAULT_RULE_FILTERS = Object.freeze({
   keyword: '',
   remoteId: 'all',
+  ruleMode: 'all',
   executionMode: 'all',
   status: 'all',
   abnormalOnly: false,
@@ -214,6 +215,8 @@ function loadRuleFilters() {
     return {
       keyword: typeof saved.keyword === 'string' ? saved.keyword : '',
       remoteId: typeof saved.remoteId === 'string' ? saved.remoteId : 'all',
+      ruleMode: ['all', 'sync', 'download-only'].includes(saved.ruleMode)
+        ? saved.ruleMode : 'all',
       executionMode: ['all', 'automatic', 'manual'].includes(saved.executionMode)
         ? saved.executionMode : 'all',
       status: ['all', 'never', 'queued', 'running', 'success', 'failed', 'interrupted'].includes(saved.status)
@@ -237,6 +240,7 @@ function hasActiveRuleFilters() {
   const filters = state.ruleFilters;
   return !!filters.keyword.trim()
     || filters.remoteId !== 'all'
+    || filters.ruleMode !== 'all'
     || filters.executionMode !== 'all'
     || filters.status !== 'all'
     || filters.abnormalOnly;
@@ -261,6 +265,7 @@ function ruleMatchesFilters(project, rule) {
   const keyword = filters.keyword.trim().toLocaleLowerCase();
   const keywordMatches = !keyword || searchable.includes(keyword);
   const remoteMatches = filters.remoteId === 'all' || rule.targetRemoteId === filters.remoteId;
+  const modeMatches = filters.ruleMode === 'all' || ruleMode(rule) === filters.ruleMode;
   const automatic = rule.schedule?.enabled === true && rule.manualOnly !== true;
   const executionMatches = filters.executionMode === 'all'
     || (filters.executionMode === 'automatic' && automatic)
@@ -268,7 +273,7 @@ function ruleMatchesFilters(project, rule) {
   const statusMatches = filters.abnormalOnly
     ? status === 'failed' || status === 'interrupted'
     : filters.status === 'all' || status === filters.status;
-  return keywordMatches && remoteMatches && executionMatches && statusMatches;
+  return keywordMatches && remoteMatches && modeMatches && executionMatches && statusMatches;
 }
 
 function renderRuleFilters() {
@@ -290,6 +295,7 @@ function renderRuleFilters() {
     ),
   ].join('');
   remoteSelect.value = state.ruleFilters.remoteId;
+  document.getElementById('ruleFilterMode').value = state.ruleFilters.ruleMode;
   document.getElementById('ruleFilterExecution').value = state.ruleFilters.executionMode;
   const statusSelect = document.getElementById('ruleFilterStatus');
   statusSelect.value = state.ruleFilters.status;
@@ -1228,6 +1234,9 @@ document.getElementById('ruleFilterKeyword').addEventListener('input', event => 
 });
 document.getElementById('ruleFilterRemote').addEventListener('change', event => {
   updateRuleFilter('remoteId', event.target.value);
+});
+document.getElementById('ruleFilterMode').addEventListener('change', event => {
+  updateRuleFilter('ruleMode', event.target.value);
 });
 document.getElementById('ruleFilterExecution').addEventListener('change', event => {
   updateRuleFilter('executionMode', event.target.value);

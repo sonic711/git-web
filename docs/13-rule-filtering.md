@@ -12,6 +12,7 @@
 
 - 關鍵字搜尋
 - Remote Tab 篩選
+- 規則模式篩選
 - 執行方式篩選
 - 最後狀態篩選
 - `只顯示異常`
@@ -49,6 +50,21 @@
 - 選擇全部時，顯示所有符合其他條件的規則。
 - 選擇特定 Remote Tab 時，只顯示 `targetRemoteId` 相同的 sync rule。
 - `download-only` 沒有 target remote，選擇特定 Remote Tab 時不顯示。
+
+### 規則模式
+
+選項：
+
+- 全部
+- 同步到 Remote
+- 只下載到本地
+
+判定：
+
+- 同步到 Remote：`mode=sync`，舊設定未提供 `mode` 時也視為 `sync`
+- 只下載到本地：`mode=download-only`
+
+規則模式可與 Remote Tab、執行方式及狀態條件組合。例如選擇 `download-only` 與自動同步時，只顯示有啟用排程的下載規則。
 
 ### 執行方式
 
@@ -98,6 +114,7 @@
 ```text
 keyword matched
 AND remote matched
+AND rule mode matched
 AND execution mode matched
 AND status matched
 ```
@@ -131,7 +148,7 @@ AND status matched
 
 - 使用瀏覽器 `localStorage`。
 - 建議 key：`git-web.rule-filters.v1`。
-- 保存 keyword、remoteId、executionMode、status 與 abnormalOnly。
+- 保存 keyword、remoteId、ruleMode、executionMode、status 與 abnormalOnly。
 - 頁面重新整理或 Java 服務重啟後恢復。
 - 不寫入 `config/settings.json`。
 - 不寫入 `state/runtime-state.json`。
@@ -170,12 +187,13 @@ AND status matched
 
 1. 輸入關鍵字後，只顯示任一搜尋欄位符合的規則。
 2. 選取 Remote Tab 後，不顯示其他 remote 與 download-only 規則。
-3. 選取自動同步或僅手動後，結果符合排程設定。
-4. 狀態篩選可正確區分 queued、running、success、failed、interrupted 與尚未執行。
-5. `只顯示異常` 只顯示 failed 或 interrupted 規則。
-6. 多個條件同時使用時採 AND。
-7. 沒有符合結果時顯示空狀態。
-8. 自動刷新後篩選條件與結果仍正確。
-9. 重新整理頁面後可恢復篩選條件。
-10. 匯出設定檔不包含篩選條件。
-11. 清除篩選後顯示全部規則並恢復原本專案收合狀態。
+3. 選取同步到 Remote 時只顯示 `sync`；選取只下載到本地時只顯示 `download-only`。
+4. 選取自動同步或僅手動後，結果符合排程設定。
+5. 狀態篩選可正確區分 queued、running、success、failed、interrupted 與尚未執行。
+6. `只顯示異常` 只顯示 failed 或 interrupted 規則。
+7. 多個條件同時使用時採 AND。
+8. 沒有符合結果時顯示空狀態。
+9. 自動刷新後篩選條件與結果仍正確。
+10. 重新整理頁面後可恢復篩選條件。
+11. 匯出設定檔不包含篩選條件。
+12. 清除篩選後顯示全部規則並恢復原本專案收合狀態。

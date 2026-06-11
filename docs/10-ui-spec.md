@@ -80,6 +80,7 @@
 
 - `關鍵字` 輸入框
 - `Remote Tab` 下拉選單
+- `規則模式` 下拉選單
 - `執行方式` 下拉選單
 - `最後狀態` 下拉選單
 - `只顯示異常` checkbox
@@ -91,13 +92,14 @@
 1. 關鍵字採不區分大小寫的部分比對。
 2. 關鍵字搜尋範圍包含 project name、rule name、source branch、target branch、Remote Tab name 與 target repo name。
 3. `Remote Tab` 預設為全部；`download-only` 規則沒有 target remote，只有選擇全部時才顯示。
-4. `執行方式` 選項為全部、自動同步、僅手動。
-5. 自動同步代表 `schedule.enabled=true` 且 `manualOnly=false`。
-6. 僅手動代表 `manualOnly=true` 或 `schedule.enabled=false`。
-7. `最後狀態` 選項為全部、尚未執行、排隊中、執行中、成功、失敗、中斷。
-8. 狀態判定優先使用目前 job 的 `queued / running`，否則使用 rule 的 `lastStatus`；沒有最後結果時視為尚未執行。
-9. `只顯示異常` 代表只顯示最後狀態為失敗或中斷的規則；啟用時忽略 `最後狀態` 下拉選單，並將該下拉選單 disabled。
-10. 多個篩選條件同時設定時採 AND 條件。
+4. `規則模式` 選項為全部、同步到 Remote、只下載到本地，分別對應 `all`、`sync`、`download-only`。
+5. `執行方式` 選項為全部、自動同步、僅手動。
+6. 自動同步代表 `schedule.enabled=true` 且 `manualOnly=false`。
+7. 僅手動代表 `manualOnly=true` 或 `schedule.enabled=false`。
+8. `最後狀態` 選項為全部、尚未執行、排隊中、執行中、成功、失敗、中斷。
+9. 狀態判定優先使用目前 job 的 `queued / running`，否則使用 rule 的 `lastStatus`；沒有最後結果時視為尚未執行。
+10. `只顯示異常` 代表只顯示最後狀態為失敗或中斷的規則；啟用時忽略 `最後狀態` 下拉選單，並將該下拉選單 disabled。
+11. 多個篩選條件同時設定時採 AND 條件。
 
 顯示行為：
 
@@ -121,7 +123,6 @@
 後續項目：
 
 - 儲存多組自訂常用檢視，例如「SIT 自動同步」或「UAT 手動確認」。
-- 依規則模式 `sync / download-only` 增加獨立篩選器。
 - 提供使用者自訂排序。
 
 ## 版本比對結果
