@@ -187,6 +187,25 @@
     </section>
   </div>
 
+  <div id="versionCompareModal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal="versionCompareModal"></div>
+    <section class="modal-card version-compare-card">
+      <div class="modal-head">
+        <div>
+          <h2>版本比對</h2>
+          <p class="panel-copy">同時比較 commit 歷程與 tree 程式內容。</p>
+        </div>
+        <button type="button" class="secondary icon-button" data-close-modal="versionCompareModal">關閉</button>
+      </div>
+      <div id="versionCompareContent" class="version-compare-content"></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="versionCompareLogButton">查看 Log</button>
+        <button type="button" class="secondary" id="versionCompareDiffButton">查看差異</button>
+        <button type="button" data-close-modal="versionCompareModal">完成</button>
+      </div>
+    </section>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
 2. 將廠商 repo 的指定 branch 下載並對齊到本地工作目錄，不推送到其他 remote。
 3. 讓多個專案可依排程自動推送到各自設定的目標 remote，或自動下載到本地。
 4. 允許使用者在 UI 上隨時修改同步規則、排程、remote 與分支設定，並將結果寫回可攜式設定檔。
+5. 比較來源與目標 branch 的 commit 與 tree，確認兩邊歷程及程式內容是否一致。
 
 ## 已確認需求
 
@@ -31,6 +32,8 @@
 - 某些分支可被標記為僅允許手動同步，不得排程。
 - 某些分支可被標記為同步前必須先檢視差異 commit 並人工確認。
 - 使用者可在 UI 修改 `是否自動同步`、`remote URL`、`來源/目標分支` 等設定，且修改結果必須寫回主設定檔。
+- sync 規則需提供版本一致性比對；commit hash 用於判斷 HEAD / 歷程位置，tree hash 用於判斷程式內容。
+- commit hash 不同但 tree hash 相同時，應顯示「內容一致，歷程不同」，不可誤判為程式版本不同。
 
 ## 需求範圍
 
@@ -46,6 +49,7 @@
 8. 以單一主設定檔保存全局主目錄、remotes、projects、rules 與排程設定。
 9. 在 UI 中編輯並保存 remotes、projects、rules 與排程設定。
 10. 對特定 rule 啟用 review gate，要求先檢視 ahead commit、查看單一 commit 的異動檔案清單，並可從挑選 commit 直接同步。
+11. 對 sync rule 執行來源與目標版本比對，顯示 commit hash、tree hash 與雙方獨有 commit 數量。
 
 ## 非目標
 

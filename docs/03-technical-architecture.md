@@ -219,6 +219,7 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 - `DELETE /api/projects/{projectId}/rules/{ruleId}`
 - `GET /api/schedules`
 - `POST /api/rules/{ruleId}/validate`
+- `POST /api/rules/{ruleId}/version-compare`
 - `POST /api/rules/{ruleId}/diff`
 - `GET /api/rules/{ruleId}/diff-cache`
 - `POST /api/rules/{ruleId}/diff-cache/refresh`
@@ -351,6 +352,18 @@ runtime state 與主設定檔分離保存，避免複製設定檔時夾帶暫態
 10. 若本次為 commit-based push，後端以目標 branch 為基準建立暫時同步分支，依順序 `cherry-pick` 選取的 commit。
 11. 執行 `git push` 或 `git push -f`。
 12. branch push 成功後，再執行 `git push --tags`；若本次是 force push，tag push 也需使用 `-f`，允許目標端既有 tags 移動。
+
+## 版本一致性比對策略
+
+- 僅適用於 `mode=sync`
+- 使用帶 `+` 的明確 refspec，強制更新最新 `origin/<sourceBranch>` 與 target remote-tracking branch，避免 force push 後讀到舊 ref
+- 以 `git rev-parse <ref>` 取得 commit hash
+- 以 `git rev-parse <ref>^{tree}` 取得 tree hash
+- 以 `git rev-list --left-right --count <targetRef>...<sourceRef>` 取得雙方獨有 commit 數量
+- commit hash 相同且 tree hash 相同：`IDENTICAL`
+- commit hash 不同但 tree hash 相同：`CONTENT_IDENTICAL`
+- tree hash 不同：`DIFFERENT`
+- tree hash 是程式內容一致性的主要依據；commit hash 只用來判斷歷程位置是否一致
 
 ## 手動同步執行策略
 

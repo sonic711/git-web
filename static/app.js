@@ -8,6 +8,7 @@ const state = {
   collapsedProjects: {},
   systemSettingsDirty: false,
   syncJobPolls: {},
+  versionComparison: null,
   autoRefreshTimer: null,
   loadingCount: 0,
 };
@@ -195,6 +196,7 @@ function renderRuleRow(project, rule) {
   const reviewReady = isReviewReady(rule.id);
   const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
   const syncDisabled = !!rule.currentJobStatus || (!downloadOnly && rule.reviewRequired && !reviewReady);
+  const versionCompareDisabled = downloadOnly || !!rule.currentJobStatus;
   const syncLabel = rule.currentJobStatus === 'queued' ? '排隊中'
     : rule.currentJobStatus === 'running' ? '同步中'
     : downloadOnly ? '下載' : '同步';
@@ -248,6 +250,7 @@ function renderRuleRow(project, rule) {
           <div class="inline-actions">
             <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯</button>
             <button class="secondary" ${downloadOnly ? 'disabled' : ''} onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
+            <button class="secondary" ${versionCompareDisabled ? 'disabled' : ''} onclick="compareVersion('${escapeAttr(rule.id)}')">版本比對</button>
             <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">${syncLabel}</button>
             <button class="secondary" onclick="validateRule('${escapeAttr(rule.id)}')">驗證</button>
             <button class="secondary" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除</button>
@@ -771,6 +774,92 @@ async function validateRule(ruleId) {
   }
 }
 
+function versionStatusLabel(status) {
+  const labels = {
+    IDENTICAL: '完全一致',
+    CONTENT_IDENTICAL: '內容一致，歷程不同',
+    DIFFERENT: '版本不同',
+    TARGET_MISSING: '目標分支不存在',
+    CHECK_FAILED: '版本比對失敗',
+  };
+  return labels[status] || status || '未知';
+}
+
+function versionStatusClass(status) {
+  if (status === 'IDENTICAL') return 'success';
+  if (status === 'CONTENT_IDENTICAL') return 'warning';
+  return 'failed';
+}
+
+function versionValue(value) {
+  return value ? escapeHtml(value) : '-';
+}
+
+function renderVersionComparison(data) {
+  const root = document.getElementById('versionCompareContent');
+  const statusLabel = versionStatusLabel(data.status);
+  root.innerHTML = `
+    <div class="version-summary ${versionStatusClass(data.status)}">
+      <span class="version-summary-label">${escapeHtml(statusLabel)}</span>
+      <span>${escapeHtml(data.message || '')}</span>
+    </div>
+    <div class="version-meta-grid">
+      <div class="version-meta-item">
+        <span>規則</span>
+        <strong>${escapeHtml(data.ruleName || data.ruleId || '-')}</strong>
+      </div>
+      <div class="version-meta-item">
+        <span>比對時間</span>
+        <strong>${escapeHtml(formatDateTime(data.checkedAt))}</strong>
+      </div>
+      <div class="version-meta-item">
+        <span>來源 Branch</span>
+        <strong>${escapeHtml(data.sourceBranch || '-')}</strong>
+      </div>
+      <div class="version-meta-item">
+        <span>目標 Branch</span>
+        <strong>${escapeHtml(data.targetBranch || '-')}</strong>
+      </div>
+    </div>
+    <div class="version-side-grid">
+      <section class="version-side">
+        <h3>來源</h3>
+        <div class="version-hash-row"><span>Commit</span><code>${versionValue(data.sourceCommit)}</code></div>
+        <div class="version-hash-row"><span>Tree</span><code>${versionValue(data.sourceTree)}</code></div>
+        <div class="version-count">${Number(data.sourceOnlyCommits || 0)} 個來源獨有 commit</div>
+      </section>
+      <section class="version-side">
+        <h3>目標</h3>
+        <div class="version-hash-row"><span>Commit</span><code>${versionValue(data.targetCommit)}</code></div>
+        <div class="version-hash-row"><span>Tree</span><code>${versionValue(data.targetTree)}</code></div>
+        <div class="version-count">${Number(data.targetOnlyCommits || 0)} 個目標獨有 commit</div>
+      </section>
+    </div>
+  `;
+  document.getElementById('versionCompareDiffButton').disabled = data.status !== 'DIFFERENT';
+  document.getElementById('versionCompareLogButton').disabled = !data.logPath;
+}
+
+async function compareVersion(ruleId) {
+  try {
+    const selection = ruleSelection(ruleId);
+    if (!selection) return;
+    if (isDownloadOnlyRule(selection.rule)) {
+      throw new Error('只下載規則沒有目標 remote，無法進行版本比對');
+    }
+    const data = await withLoading('比對來源與目標版本中...', () =>
+      api(`/api/rules/${ruleId}/version-compare`, { method: 'POST' })
+    );
+    state.versionComparison = data;
+    renderVersionComparison(data);
+    openModal('versionCompareModal');
+    const isSuccessful = data.status === 'IDENTICAL' || data.status === 'CONTENT_IDENTICAL';
+    showToast(versionStatusLabel(data.status), isSuccessful ? 'success' : 'error');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
 async function showDiff(ruleId) {
   try {
     const selection = ruleSelection(ruleId);
@@ -1005,6 +1094,19 @@ document.getElementById('targetRemoteId').addEventListener('change', updateTarge
 document.getElementById('targetRepoName').addEventListener('input', updateTargetUrlPreview);
 document.getElementById('targetBranch').addEventListener('input', syncRuleFormRules);
 document.getElementById('remoteBaseUrl').addEventListener('input', updateRemoteExamplePreview);
+document.getElementById('versionCompareDiffButton').addEventListener('click', () => {
+  const ruleId = state.versionComparison?.ruleId;
+  if (ruleId) {
+    closeModal('versionCompareModal');
+    showDiff(ruleId);
+  }
+});
+document.getElementById('versionCompareLogButton').addEventListener('click', () => {
+  const logPath = state.versionComparison?.logPath;
+  if (logPath) {
+    loadLog(logPath);
+  }
+});
 
 document.querySelectorAll('[data-close-modal]').forEach(button => {
   button.addEventListener('click', () => closeModal(button.dataset.closeModal));
@@ -1045,6 +1147,7 @@ window.editRule = editRule;
 window.toggleProjectCollapse = toggleProjectCollapse;
 window.editRemote = editRemote;
 window.showDiff = showDiff;
+window.compareVersion = compareVersion;
 window.runSync = runSync;
 window.validateRule = validateRule;
 window.toggleAutoSync = toggleAutoSync;

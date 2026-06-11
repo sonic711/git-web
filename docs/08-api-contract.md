@@ -323,6 +323,46 @@
 }
 ```
 
+### `POST /api/rules/{ruleId}/version-compare`
+
+用途：
+
+- 比較來源 branch 與目標 branch 的最新版本
+- 僅適用於 `mode=sync`
+- 同時回傳 commit hash、tree hash 與雙方獨有 commit 數量
+
+狀態：
+
+- `IDENTICAL`：commit 與 tree 都相同
+- `CONTENT_IDENTICAL`：commit 不同但 tree 相同
+- `DIFFERENT`：tree 不同
+- `TARGET_MISSING`：目標 branch 不存在
+- `CHECK_FAILED`：Git 比對失敗
+
+回應範例：
+
+```json
+{
+  "projectId": "fsap-adm",
+  "ruleId": "rule-sit",
+  "status": "CONTENT_IDENTICAL",
+  "checkedAt": "2026-06-11T14:30:00+08:00",
+  "sourceBranch": "sit",
+  "targetBranch": "sit",
+  "sourceCommit": "1111111111111111111111111111111111111111",
+  "targetCommit": "2222222222222222222222222222222222222222",
+  "sourceTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "targetTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceOnlyCommits": 2,
+  "targetOnlyCommits": 0,
+  "commitIdentical": false,
+  "contentIdentical": true,
+  "message": "Content is identical, but commit history differs"
+}
+```
+
+完整規格見 `docs/12-version-comparison.md`。
+
 ### `POST /api/rules/{ruleId}/diff`
 
 用途：

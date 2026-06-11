@@ -274,6 +274,10 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     HttpUtil.sendJson(exchange, 200, gitService.validate(configService.getConfig(), selection.project, selection.rule));
                     return;
                 }
+                if ("version-compare".equals(parts[4]) && "POST".equals(exchange.getRequestMethod())) {
+                    HttpUtil.sendJson(exchange, 200, versionCompare(ruleId));
+                    return;
+                }
                 if ("diff-cache".equals(parts[4]) && "GET".equals(exchange.getRequestMethod())) {
                     Map<String, Object> summary = diffCacheService.readSummary(ruleId);
                     if (summary == null) {
@@ -624,6 +628,50 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 runtimeStateService.markFinished(rule.id, "failed", triggerSource, null, logPath, exception.getMessage());
                 throw exception;
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private Map<String, Object> versionCompare(String ruleId) throws Exception {
+        AppConfig config = configService.getConfig();
+        RuleSelection selection = Models.findRuleSelection(config, ruleId);
+        ProjectConfig project = selection.project;
+        RuleConfig rule = selection.rule;
+        Models.require(rule.isSyncMode(), "Version comparison is only available for sync rules");
+
+        ReentrantLock lock = repoLocks.computeIfAbsent(project.localRepoPath(config, rule).toAbsolutePath().normalize().toString(),
+            ignored -> new ReentrantLock());
+        lock.lock();
+        String runId = logService.createRunId("version-compare-" + rule.id);
+        try {
+            Map<String, Object> result = gitService.versionCompare(config, project, rule);
+            String logPath = logService.writeLog(runId, "VERSION COMPARISON\n" + Json.stringify(result));
+            result.put("logPath", logPath);
+            return result;
+        } catch (Exception exception) {
+            String message = Models.firstNonBlank(exception.getMessage(), exception.getClass().getName());
+            String logPath = logService.writeLog(runId, "VERSION COMPARISON ERROR\n" + message);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("projectId", project.id);
+            result.put("projectName", project.name);
+            result.put("ruleId", rule.id);
+            result.put("ruleName", rule.name);
+            result.put("status", "CHECK_FAILED");
+            result.put("checkedAt", Models.nowIso());
+            result.put("sourceBranch", rule.sourceBranch);
+            result.put("targetBranch", rule.targetBranch);
+            result.put("sourceCommit", null);
+            result.put("targetCommit", null);
+            result.put("sourceTree", null);
+            result.put("targetTree", null);
+            result.put("sourceOnlyCommits", 0);
+            result.put("targetOnlyCommits", 0);
+            result.put("commitIdentical", false);
+            result.put("contentIdentical", false);
+            result.put("message", "Version comparison failed. See log for details.");
+            result.put("logPath", logPath);
+            return result;
         } finally {
             lock.unlock();
         }

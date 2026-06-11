@@ -123,6 +123,21 @@
 3. 重新載入排程與規則。
 4. 讓其他人可直接複製該設定檔匯入使用。
 
+## 情境 10：確認來源與目標版本一致
+
+使用者需要確認來源 branch 最新版本與目標 branch 最新版本是否一致時：
+
+1. 使用者在 sync rule 點擊 `版本比對`。
+2. 系統 fetch 最新來源 branch 與目標 branch。
+3. 系統取得雙方最新 commit hash。
+4. 系統取得雙方最新 tree hash。
+5. 系統計算來源與目標各自獨有的 commit 數量。
+6. commit hash 與 tree hash 都相同時，顯示「完全一致」。
+7. commit hash 不同但 tree hash 相同時，顯示「內容一致，歷程不同」。
+8. tree hash 不同時，顯示「版本不同」。
+
+此功能只適用於 `mode=sync`。完整判定規則見 `docs/12-version-comparison.md`。
+
 ## 單筆同步標準流程
 
 1. 使用者在列表頁選擇一筆 rule。

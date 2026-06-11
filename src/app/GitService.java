@@ -56,6 +56,60 @@ final class GitService {
         return result;
     }
 
+    Map<String, Object> versionCompare(AppConfig config, ProjectConfig project, RuleConfig rule)
+        throws IOException, InterruptedException {
+        Models.require(rule.isSyncMode(), "Version comparison is only available for sync rules");
+        Models.require(project.enabled, "Project is disabled");
+        Models.require(rule.enabled, "Rule is disabled");
+
+        ensureRepoReady(config, project, rule);
+        ensureTargetRemote(config, project, rule);
+
+        Path repoPath = project.localRepoPath(config, rule);
+        String internalRemote = internalRemoteName(rule.id);
+        String sourceRef = originRef(rule);
+        String targetRef = "refs/remotes/" + internalRemote + "/" + rule.targetBranch;
+
+        runChecked(repoPath, List.of(
+            "git", "fetch", "origin",
+            "+refs/heads/" + rule.sourceBranch + ":" + sourceRef));
+
+        GitCommandResult targetBranch = runner.run(repoPath,
+            List.of("git", "ls-remote", "--exit-code", internalRemote, "refs/heads/" + rule.targetBranch));
+        if (targetBranch.exitCode == 2) {
+            return versionComparisonResponse(config, project, rule, "TARGET_MISSING",
+                null, null, null, null, 0, 0, false, false, "Target branch does not exist");
+        }
+        if (!targetBranch.isSuccess()) {
+            throw gitCommandException(targetBranch);
+        }
+
+        runChecked(repoPath, List.of(
+            "git", "fetch", internalRemote,
+            "+refs/heads/" + rule.targetBranch + ":" + targetRef));
+
+        String sourceCommit = resolveRevision(repoPath, sourceRef);
+        String targetCommit = resolveRevision(repoPath, targetRef);
+        String sourceTree = resolveRevision(repoPath, sourceRef + "^{tree}");
+        String targetTree = resolveRevision(repoPath, targetRef + "^{tree}");
+        GitCommandResult commitCounts = runChecked(repoPath,
+            List.of("git", "rev-list", "--left-right", "--count", targetRef + "..." + sourceRef));
+        int[] counts = parseCommitCounts(commitCounts.stdout);
+
+        boolean commitIdentical = sourceCommit.equals(targetCommit);
+        boolean contentIdentical = sourceTree.equals(targetTree);
+        String status = commitIdentical && contentIdentical ? "IDENTICAL"
+            : contentIdentical ? "CONTENT_IDENTICAL"
+            : "DIFFERENT";
+        String message = "IDENTICAL".equals(status) ? "Commit and content are identical"
+            : "CONTENT_IDENTICAL".equals(status) ? "Content is identical, but commit history differs"
+            : "Source and target content differ";
+
+        return versionComparisonResponse(config, project, rule, status,
+            sourceCommit, targetCommit, sourceTree, targetTree,
+            counts[1], counts[0], commitIdentical, contentIdentical, message);
+    }
+
     Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         Models.require(!rule.isDownloadOnly(), "Diff is not available for download-only rules");
         ensureRepoReady(config, project, rule);
@@ -510,9 +564,47 @@ final class GitService {
     private GitCommandResult runChecked(Path workDir, List<String> command) throws IOException, InterruptedException {
         GitCommandResult result = runner.run(workDir, command);
         if (!result.isSuccess()) {
-            throw new IOException("Git command failed: " + String.join(" ", command) + "\n" + result.stderr);
+            throw gitCommandException(result);
         }
         return result;
+    }
+
+    private IOException gitCommandException(GitCommandResult result) {
+        return new IOException("Git command failed: " + String.join(" ", result.command) + "\n" + result.stderr);
+    }
+
+    private int[] parseCommitCounts(String output) {
+        String[] parts = output.strip().split("\\s+");
+        Models.require(parts.length == 2, "Unexpected git rev-list count output: " + output);
+        return new int[] {Integer.parseInt(parts[0]), Integer.parseInt(parts[1])};
+    }
+
+    private Map<String, Object> versionComparisonResponse(AppConfig config, ProjectConfig project, RuleConfig rule,
+                                                          String status, String sourceCommit, String targetCommit,
+                                                          String sourceTree, String targetTree, int sourceOnlyCommits,
+                                                          int targetOnlyCommits, boolean commitIdentical,
+                                                          boolean contentIdentical, String message) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("projectId", project.id);
+        response.put("projectName", project.name);
+        response.put("ruleId", rule.id);
+        response.put("ruleName", rule.name);
+        response.put("status", status);
+        response.put("checkedAt", Models.nowIso());
+        response.put("sourceBranch", rule.sourceBranch);
+        response.put("targetBranch", rule.targetBranch);
+        response.put("targetRemoteId", rule.targetRemoteId);
+        response.put("targetRemoteUrl", targetRemoteUrl(config, rule));
+        response.put("sourceCommit", sourceCommit);
+        response.put("targetCommit", targetCommit);
+        response.put("sourceTree", sourceTree);
+        response.put("targetTree", targetTree);
+        response.put("sourceOnlyCommits", sourceOnlyCommits);
+        response.put("targetOnlyCommits", targetOnlyCommits);
+        response.put("commitIdentical", commitIdentical);
+        response.put("contentIdentical", contentIdentical);
+        response.put("message", message);
+        return response;
     }
 
     private boolean addCheck(List<Object> checks, String key, boolean ok) {

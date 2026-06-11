@@ -12,6 +12,7 @@
 4. 排程設定頁
 5. Diff / Review 頁
 6. 執行結果 / Log 頁
+7. 版本比對結果 modal / panel
 
 ## 1. Mapping 列表頁
 
@@ -43,6 +44,7 @@
 
 - `編輯`
 - `查看差異`
+- `版本比對`
 - `同步`
 - `查看 Log`
 - `刪除`
@@ -64,6 +66,34 @@
 11. 當前有手動同步 job 時，列表需顯示 `queued` 或 `running`
 12. 同一筆 rule 若已有手動同步 job 在 `queued / running`，同步按鈕需 disabled
 13. 任何會呼叫後端 API 的按鈕操作，都需顯示明確 loading overlay，直到作業完成或失敗
+14. `版本比對` 只在 `mode=sync` 規則啟用；`mode=download-only` 應 disabled 或隱藏
+15. 版本比對結果需區分「完全一致」、「內容一致，歷程不同」、「版本不同」、「目標分支不存在」與「比對失敗」
+
+## 版本比對結果
+
+用途：
+
+- 顯示來源與目標 branch 的版本一致性
+- 避免只比較 commit hash 而將 cherry-pick 後的相同程式內容誤判為不同
+
+欄位：
+
+- 比對狀態
+- 比對時間
+- 來源 / 目標 branch
+- source / target commit hash
+- source / target tree hash
+- source-only commits
+- target-only commits
+
+互動規則：
+
+1. hash 預設可顯示短值，hover 或展開後顯示完整 hash
+2. commit 與 tree 都相同時顯示「完全一致」
+3. commit 不同但 tree 相同時顯示「內容一致，歷程不同」
+4. tree 不同時顯示「版本不同」，並提供 `查看差異` 入口
+5. 比對失敗時列表只顯示簡短錯誤，完整錯誤需可透過 tooltip 或 log 查看
+6. 詳細判定與 API 契約見 `docs/12-version-comparison.md`
 
 ## Settings 區
 

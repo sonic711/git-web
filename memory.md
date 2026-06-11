@@ -50,6 +50,7 @@
 - rule 已支援 `mode` 欄位，目前包含 `sync` 與 `download-only`；舊設定缺漏時預設為 `sync`。
 - `download-only` 模式只從廠商 repo 下載並對齊本地來源分支，不建立 target remote，也不 push 到其他 remote；此模式會強制同步來源 remote tags，包含 tag 移動與刪除，但不支援差異 review、Force Push 或 target tags push。
 - `download-only` rule 可選填 `downloadWorkspaceRoot` 覆寫下載主目錄；未設定時使用全域 `localWorkspaceRoot`。此欄位屬於本機路徑，匯出設定檔時會移除。
+- sync rule 的版本一致性需同時比較 commit hash 與 tree hash；tree 相同代表程式內容一致，即使 cherry-pick 造成 commit hash 不同。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
 - Settings 的 `選資料夾` 應優先使用可見於前景的目錄選擇視窗；macOS 用原生視窗，Windows fallback 也不得用無 owner 的 chooser，且未儲存前不得被背景自動刷新覆寫欄位內容。
@@ -82,6 +83,7 @@
 - Java 模組設計：[docs/09-java-module-design.md](/Users/sonic711/Desktop/development/git-web/docs/09-java-module-design.md)
 - UI 規格：[docs/10-ui-spec.md](/Users/sonic711/Desktop/development/git-web/docs/10-ui-spec.md)
 - Phase 2 差異快取：[docs/11-phase-2-diff-cache.md](/Users/sonic711/Desktop/development/git-web/docs/11-phase-2-diff-cache.md)
+- Phase 2 版本一致性比對：[docs/12-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/12-version-comparison.md)
 
 ## 目前設定檔策略
 
@@ -188,3 +190,5 @@
 - `queued` 狀態也視為暫時占用中，避免同一筆 rule 的排程同步在手動 job 尚未開始時插隊。
 - 已調整同步流程：branch push 成功後會再 push tags；一般同步只新增不存在的 tags，Force Push 會先 force-fetch 來源 tags 並 force-push tags 到目標 remote。
 - 已實作 `download-only` rule mode：UI 可選「只下載到本地」，後端只 clone/fetch/reset/pull 來源分支，不建立 target remote，也不執行 push；fetch 來源時使用 `--force --prune-tags` 讓本地 tags 與來源 remote tags 對齊。
+- 已實作手動版本一致性比對：sync rule 可比較來源與目標的 commit hash、tree hash 與雙方獨有 commit 數量，並判定 `IDENTICAL`、`CONTENT_IDENTICAL`、`DIFFERENT`、`TARGET_MISSING` 或 `CHECK_FAILED`。
+- UI 已新增 `版本比對` 操作與結果視窗；只有 `DIFFERENT` 狀態可直接進入既有差異檢視流程，完整執行結果會寫入當日 log。

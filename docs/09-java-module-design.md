@@ -70,6 +70,18 @@
 - 取得單一 commit 的異動檔案清單
 - 回傳 UI 可顯示的摘要資料
 
+### `GitService` 版本比對職責
+
+職責：
+
+- 目前由既有 `GitService` 實作，不另外建立 service
+- 僅處理 `mode=sync` 規則
+- fetch 最新來源與目標 branch
+- 取得 source / target commit hash
+- 取得 source / target tree hash
+- 計算 `sourceOnlyCommits` 與 `targetOnlyCommits`
+- 回傳 `IDENTICAL`、`CONTENT_IDENTICAL`、`DIFFERENT`、`TARGET_MISSING` 或 `CHECK_FAILED`
+
 ### `SyncService`
 
 職責：
@@ -122,6 +134,7 @@
 ### `RuleController`
 
 - `POST /api/rules/{ruleId}/validate`
+- `POST /api/rules/{ruleId}/version-compare`
 - `POST /api/rules/{ruleId}/diff`
 - `GET /api/rules/{ruleId}/diff-cache`
 - `POST /api/rules/{ruleId}/diff-cache/refresh`
