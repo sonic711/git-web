@@ -121,9 +121,11 @@ pre {
   padding: 20px 24px 32px;
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .panel {
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -309,11 +311,75 @@ th {
 }
 
 .project-card {
+  min-width: 0;
   margin-bottom: 16px;
   padding: 16px;
   border: 1px solid #eadfce;
   border-radius: 14px;
   background: #fffdf8;
+}
+
+.rule-filter-bar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(150px, 0.8fr)) auto auto;
+  gap: 10px;
+  align-items: end;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #dac4a4;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 230, 0.96), rgba(241, 227, 208, 0.72)),
+    repeating-linear-gradient(90deg, transparent 0 24px, rgba(166, 84, 47, 0.04) 24px 25px);
+}
+
+.rule-filter-bar > label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rule-filter-keyword input {
+  min-width: 0;
+}
+
+.rule-filter-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.rule-filter-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  min-width: max-content;
+}
+
+.rule-filter-actions strong {
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.filter-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 34px 18px;
+  border: 1px dashed #cdb795;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: var(--muted);
+  text-align: center;
+}
+
+.filter-empty strong {
+  color: var(--ink);
+  font-size: 18px;
 }
 
 .project-head {
@@ -347,6 +413,11 @@ th {
 
 .project-rules {
   margin-top: 8px;
+  overflow-x: auto;
+}
+
+#remoteTable {
+  overflow-x: auto;
 }
 
 .row-controls {
@@ -543,8 +614,39 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .rule-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rule-filter-keyword,
+  .rule-filter-actions {
+    grid-column: 1 / -1;
+  }
+
+  .rule-filter-actions {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-items: start;
+    min-width: 0;
+  }
+
   .modal {
     padding: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .rule-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-filter-keyword,
+  .rule-filter-actions {
+    grid-column: auto;
+  }
+
+  .rule-filter-actions {
+    grid-template-columns: 1fr;
   }
 }
 

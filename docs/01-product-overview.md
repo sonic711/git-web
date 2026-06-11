@@ -11,6 +11,7 @@
 3. 讓多個專案可依排程自動推送到各自設定的目標 remote，或自動下載到本地。
 4. 允許使用者在 UI 上隨時修改同步規則、排程、remote 與分支設定，並將結果寫回可攜式設定檔。
 5. 比較來源與目標 branch 的 commit 與 tree，確認兩邊歷程及程式內容是否一致。
+6. 在規則數量增加時，透過前端篩選快速縮小 Projects 列表顯示範圍。
 
 ## 已確認需求
 
@@ -34,6 +35,8 @@
 - 使用者可在 UI 修改 `是否自動同步`、`remote URL`、`來源/目標分支` 等設定，且修改結果必須寫回主設定檔。
 - sync 規則需提供版本一致性比對；commit hash 用於判斷 HEAD / 歷程位置，tree hash 用於判斷程式內容。
 - commit hash 不同但 tree hash 相同時，應顯示「內容一致，歷程不同」，不可誤判為程式版本不同。
+- Projects 列表需支援規則篩選，第一版包含關鍵字、Remote Tab、執行方式、最後狀態與只顯示異常。
+- 篩選條件屬於本機 UI 偏好，只保存於瀏覽器，不得寫入或匯出 `config/settings.json`。
 
 ## 需求範圍
 
@@ -50,6 +53,7 @@
 9. 在 UI 中編輯並保存 remotes、projects、rules 與排程設定。
 10. 對特定 rule 啟用 review gate，要求先檢視 ahead commit、查看單一 commit 的異動檔案清單，並可從挑選 commit 直接同步。
 11. 對 sync rule 執行來源與目標版本比對，顯示 commit hash、tree hash 與雙方獨有 commit 數量。
+12. 在 Projects 列表篩選規則，並顯示符合筆數與全部筆數。
 
 ## 非目標
 

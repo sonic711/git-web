@@ -55,6 +55,46 @@
         </div>
         <button id="newProjectButton">新增專案</button>
       </div>
+      <div class="rule-filter-bar" aria-label="規則篩選">
+        <label class="rule-filter-keyword">
+          <span>關鍵字</span>
+          <input id="ruleFilterKeyword" type="search" placeholder="專案、規則、Branch、Remote...">
+        </label>
+        <label>
+          <span>Remote Tab</span>
+          <select id="ruleFilterRemote">
+            <option value="all">全部 Remote</option>
+          </select>
+        </label>
+        <label>
+          <span>執行方式</span>
+          <select id="ruleFilterExecution">
+            <option value="all">全部方式</option>
+            <option value="automatic">自動同步</option>
+            <option value="manual">僅手動</option>
+          </select>
+        </label>
+        <label>
+          <span>最後狀態</span>
+          <select id="ruleFilterStatus">
+            <option value="all">全部狀態</option>
+            <option value="never">尚未執行</option>
+            <option value="queued">排隊中</option>
+            <option value="running">執行中</option>
+            <option value="success">成功</option>
+            <option value="failed">失敗</option>
+            <option value="interrupted">中斷</option>
+          </select>
+        </label>
+        <label class="rule-filter-check">
+          <input id="ruleFilterAbnormal" type="checkbox">
+          <span>只顯示異常</span>
+        </label>
+        <div class="rule-filter-actions">
+          <strong id="ruleFilterSummary">符合 0 / 全部 0 條規則</strong>
+          <button type="button" class="secondary" id="clearRuleFiltersButton">清除篩選</button>
+        </div>
+      </div>
       <div id="projectList"></div>
     </section>
 

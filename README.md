@@ -14,6 +14,7 @@
 8. 系統設定以可攜式設定檔保存，方便直接複製給其他人使用。
 9. UI 可匯出 / 匯入主設定檔；匯出內容不包含全局本地主目錄，避免他人匯入後直接在原機器路徑 clone。
 10. sync 規則可比較來源與目標的 commit hash、tree hash 與雙方獨有 commit 數量，確認歷程及程式內容是否一致。
+11. Projects 列表可依關鍵字、Remote Tab、執行方式與最後狀態篩選，避免規則數量增加後主畫面過長。
 
 ## 文件清單
 
@@ -30,6 +31,7 @@
 - [docs/10-ui-spec.md](/Users/sonic711/Desktop/development/git-web/docs/10-ui-spec.md)
 - [docs/11-phase-2-diff-cache.md](/Users/sonic711/Desktop/development/git-web/docs/11-phase-2-diff-cache.md)
 - [docs/12-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/12-version-comparison.md)
+- [docs/13-rule-filtering.md](/Users/sonic711/Desktop/development/git-web/docs/13-rule-filtering.md)
 
 ## 已確認架構
 

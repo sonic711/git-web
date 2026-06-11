@@ -62,11 +62,20 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 - 提供 diff 檢視與人工確認操作
 - 觸發單筆同步
 - 顯示執行結果與 log
+- 在瀏覽器端篩選 Projects 與 rules
 
 限制：
 
 - 不直接執行 Git
 - 不直接讀寫任意本機資料夾
+
+### UI 篩選狀態
+
+- 規則篩選由前端對已載入的 projects / rules 執行，不新增後端查詢 API。
+- 篩選偏好使用瀏覽器 `localStorage` 保存，重新整理頁面或服務重啟後仍可恢復。
+- 篩選偏好不得寫入 `config/settings.json`、匯出設定檔或 runtime state。
+- 後端資料自動刷新後，前端需以原篩選條件重新計算結果。
+- 第一版不處理跨瀏覽器或跨電腦同步 UI 偏好。
 
 ## 2. Java 17 Git Bridge Service
 

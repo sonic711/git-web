@@ -1,8 +1,18 @@
+const RULE_FILTER_STORAGE_KEY = 'git-web.rule-filters.v1';
+const DEFAULT_RULE_FILTERS = Object.freeze({
+  keyword: '',
+  remoteId: 'all',
+  executionMode: 'all',
+  status: 'all',
+  abnormalOnly: false,
+});
+
 const state = {
   projects: [],
   remotes: [],
   systemConfig: { localWorkspaceRoot: '' },
   selectedRemoteTab: 'all',
+  ruleFilters: loadRuleFilters(),
   reviewSelections: {},
   rowForcePush: {},
   collapsedProjects: {},
@@ -105,6 +115,7 @@ function closeModal(id) {
 
 function render() {
   renderSystemSettings();
+  renderRuleFilters();
   renderProjects();
   renderRemoteTabs();
   renderRemotes();
@@ -120,28 +131,50 @@ function renderSystemSettings() {
 
 function renderProjects() {
   const root = document.getElementById('projectList');
+  const totalRuleCount = state.projects.reduce((sum, project) => sum + (project.rules || []).length, 0);
+  const filtersActive = hasActiveRuleFilters();
+  const filteredProjects = state.projects.map(project => ({
+    project,
+    rules: (project.rules || []).filter(rule => ruleMatchesFilters(project, rule)),
+  })).filter(item => !filtersActive || item.rules.length > 0);
+  const matchedRuleCount = filteredProjects.reduce((sum, item) => sum + item.rules.length, 0);
+  renderRuleFilterSummary(matchedRuleCount, totalRuleCount);
+
   if (!state.projects.length) {
     root.innerHTML = '<div class="viewer empty">尚未建立專案</div>';
     return;
   }
+  if (!filteredProjects.length) {
+    root.innerHTML = `
+      <div class="filter-empty">
+        <strong>沒有符合條件的規則</strong>
+        <span>請調整篩選條件，或清除篩選以顯示全部規則。</span>
+      </div>
+    `;
+    return;
+  }
 
-  root.innerHTML = state.projects.map(project => {
-    const rules = project.rules || [];
-    const isCollapsed = !!state.collapsedProjects[project.id];
+  root.innerHTML = filteredProjects.map(({ project, rules }) => {
+    const totalProjectRules = (project.rules || []).length;
+    const isCollapsed = !filtersActive && !!state.collapsedProjects[project.id];
     const ruleRows = rules.length
       ? rules.map(rule => renderRuleRow(project, rule)).join('')
       : '<tr><td colspan="6" class="empty">尚未建立同步規則</td></tr>';
+    const ruleCountLabel = filtersActive
+      ? `${rules.length} / ${totalProjectRules} 條規則`
+      : `${totalProjectRules} 條規則`;
 
     return `
       <section class="project-card">
         <div class="project-head">
           <div>
             <div class="project-title-row">
-              <button class="secondary collapse-toggle" onclick="toggleProjectCollapse('${escapeAttr(project.id)}')">
-                ${isCollapsed ? '展開規則' : '收合規則'}
+              <button class="secondary collapse-toggle" ${filtersActive ? 'disabled' : ''}
+                onclick="toggleProjectCollapse('${escapeAttr(project.id)}')">
+                ${filtersActive ? '篩選展開中' : isCollapsed ? '展開規則' : '收合規則'}
               </button>
               <h3>${escapeHtml(project.name)}</h3>
-              <span class="tag">${rules.length} 條規則</span>
+              <span class="tag">${ruleCountLabel}</span>
             </div>
             <div class="project-meta">${escapeHtml(project.vendorRepoUrl)}</div>
           </div>
@@ -169,6 +202,118 @@ function renderProjects() {
       </section>
     `;
   }).join('');
+}
+
+function loadRuleFilters() {
+  try {
+    const raw = localStorage.getItem(RULE_FILTER_STORAGE_KEY);
+    if (!raw) {
+      return { ...DEFAULT_RULE_FILTERS };
+    }
+    const saved = JSON.parse(raw);
+    return {
+      keyword: typeof saved.keyword === 'string' ? saved.keyword : '',
+      remoteId: typeof saved.remoteId === 'string' ? saved.remoteId : 'all',
+      executionMode: ['all', 'automatic', 'manual'].includes(saved.executionMode)
+        ? saved.executionMode : 'all',
+      status: ['all', 'never', 'queued', 'running', 'success', 'failed', 'interrupted'].includes(saved.status)
+        ? saved.status : 'all',
+      abnormalOnly: saved.abnormalOnly === true,
+    };
+  } catch {
+    return { ...DEFAULT_RULE_FILTERS };
+  }
+}
+
+function saveRuleFilters() {
+  try {
+    localStorage.setItem(RULE_FILTER_STORAGE_KEY, JSON.stringify(state.ruleFilters));
+  } catch {
+    // Filtering still works when browser storage is unavailable.
+  }
+}
+
+function hasActiveRuleFilters() {
+  const filters = state.ruleFilters;
+  return !!filters.keyword.trim()
+    || filters.remoteId !== 'all'
+    || filters.executionMode !== 'all'
+    || filters.status !== 'all'
+    || filters.abnormalOnly;
+}
+
+function effectiveRuleStatus(rule) {
+  return rule.currentJobStatus || rule.lastStatus || 'never';
+}
+
+function ruleMatchesFilters(project, rule) {
+  const filters = state.ruleFilters;
+  const status = effectiveRuleStatus(rule);
+  const remote = remoteById(rule.targetRemoteId);
+  const searchable = [
+    project.name,
+    rule.name,
+    rule.sourceBranch,
+    rule.targetBranch,
+    remote?.name,
+    rule.targetRepoName,
+  ].filter(Boolean).join(' ').toLocaleLowerCase();
+  const keyword = filters.keyword.trim().toLocaleLowerCase();
+  const keywordMatches = !keyword || searchable.includes(keyword);
+  const remoteMatches = filters.remoteId === 'all' || rule.targetRemoteId === filters.remoteId;
+  const automatic = rule.schedule?.enabled === true && rule.manualOnly !== true;
+  const executionMatches = filters.executionMode === 'all'
+    || (filters.executionMode === 'automatic' && automatic)
+    || (filters.executionMode === 'manual' && !automatic);
+  const statusMatches = filters.abnormalOnly
+    ? status === 'failed' || status === 'interrupted'
+    : filters.status === 'all' || status === filters.status;
+  return keywordMatches && remoteMatches && executionMatches && statusMatches;
+}
+
+function renderRuleFilters() {
+  if (state.ruleFilters.remoteId !== 'all'
+      && !state.remotes.some(remote => remote.id === state.ruleFilters.remoteId)) {
+    state.ruleFilters.remoteId = 'all';
+    saveRuleFilters();
+  }
+
+  const keywordInput = document.getElementById('ruleFilterKeyword');
+  if (keywordInput.value !== state.ruleFilters.keyword) {
+    keywordInput.value = state.ruleFilters.keyword;
+  }
+  const remoteSelect = document.getElementById('ruleFilterRemote');
+  remoteSelect.innerHTML = [
+    '<option value="all">全部 Remote</option>',
+    ...state.remotes.map(remote =>
+      `<option value="${escapeAttr(remote.id)}">${escapeHtml(remote.name)}${remote.enabled ? '' : ' (disabled)'}</option>`
+    ),
+  ].join('');
+  remoteSelect.value = state.ruleFilters.remoteId;
+  document.getElementById('ruleFilterExecution').value = state.ruleFilters.executionMode;
+  const statusSelect = document.getElementById('ruleFilterStatus');
+  statusSelect.value = state.ruleFilters.status;
+  statusSelect.disabled = state.ruleFilters.abnormalOnly;
+  document.getElementById('ruleFilterAbnormal').checked = state.ruleFilters.abnormalOnly;
+  document.getElementById('clearRuleFiltersButton').disabled = !hasActiveRuleFilters();
+}
+
+function renderRuleFilterSummary(matched, total) {
+  document.getElementById('ruleFilterSummary').textContent = `符合 ${matched} / 全部 ${total} 條規則`;
+}
+
+function updateRuleFilter(key, value) {
+  state.ruleFilters[key] = value;
+  saveRuleFilters();
+  renderRuleFilters();
+  renderProjects();
+}
+
+function clearRuleFilters() {
+  state.ruleFilters = { ...DEFAULT_RULE_FILTERS };
+  saveRuleFilters();
+  renderRuleFilters();
+  renderProjects();
 }
 
 function toggleProjectCollapse(projectId) {
@@ -1078,6 +1223,22 @@ document.getElementById('importConfigFile').addEventListener('change', importCon
 document.getElementById('newProjectButton').addEventListener('click', newProject);
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());
+document.getElementById('ruleFilterKeyword').addEventListener('input', event => {
+  updateRuleFilter('keyword', event.target.value);
+});
+document.getElementById('ruleFilterRemote').addEventListener('change', event => {
+  updateRuleFilter('remoteId', event.target.value);
+});
+document.getElementById('ruleFilterExecution').addEventListener('change', event => {
+  updateRuleFilter('executionMode', event.target.value);
+});
+document.getElementById('ruleFilterStatus').addEventListener('change', event => {
+  updateRuleFilter('status', event.target.value);
+});
+document.getElementById('ruleFilterAbnormal').addEventListener('change', event => {
+  updateRuleFilter('abnormalOnly', event.target.checked);
+});
+document.getElementById('clearRuleFiltersButton').addEventListener('click', clearRuleFilters);
 document.getElementById('pickGlobalWorkspaceRootButton').addEventListener('click', pickGlobalWorkspaceRoot);
 document.getElementById('pickDownloadWorkspaceRootButton').addEventListener('click', pickDownloadWorkspaceRoot);
 document.getElementById('vendorRepoUrl').addEventListener('input', syncProjectFormRules);
