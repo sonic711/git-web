@@ -329,7 +329,7 @@
 
 - 比較來源 branch 與目標 branch 的最新版本
 - 僅適用於 `mode=sync`
-- 同時回傳 commit hash、tree hash 與雙方獨有 commit 數量
+- 同時回傳 commit hash、tree hash、雙方獨有 commit 數量與指向 HEAD 的遠端 tags
 
 狀態：
 
@@ -353,15 +353,63 @@
   "targetCommit": "2222222222222222222222222222222222222222",
   "sourceTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "targetTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceTags": ["release-1.2.0"],
+  "targetTags": ["release-1.2.0"],
   "sourceOnlyCommits": 2,
   "targetOnlyCommits": 0,
   "commitIdentical": false,
   "contentIdentical": true,
+  "tagsIdentical": true,
   "message": "Content is identical, but commit history differs"
 }
 ```
 
 完整規格見 `docs/12-version-comparison.md`。
+
+### `GET /api/version-comparison/specs`
+
+回傳目前 enabled sync rules 可用的批次規格：
+
+```json
+[
+  {
+    "key": "uat|target-uat|uat",
+    "sourceBranch": "uat",
+    "targetRemoteId": "target-uat",
+    "targetRemoteName": "UAT",
+    "targetBranch": "uat",
+    "ruleCount": 12
+  }
+]
+```
+
+### `POST /api/version-comparison/jobs`
+
+建立批次版本比對背景 job：
+
+```json
+{
+  "sourceBranch": "uat",
+  "targetRemoteId": "target-uat",
+  "targetBranch": "uat"
+}
+```
+
+回應 HTTP `202`，包含 `jobId`、`queued` 與總筆數。
+
+### `GET /api/version-comparison/jobs/{jobId}`
+
+查詢批次進度與結果。每筆結果沿用單筆版本比對欄位，另包含：
+
+- `sourceTags`
+- `targetTags`
+- `tagsIdentical`
+
+job 狀態為 `queued | running | completed`。個別失敗以 result 的 `CHECK_FAILED` 表示，不使整批停止。
+
+### `POST /api/version-comparison/jobs/{jobId}/rules/{ruleId}`
+
+在批次 job 完成後，重新比對其中一筆 rule。回應 HTTP `202`，該 job 暫時回到 `running`，完成後以新結果取代原結果。
 
 ### `POST /api/rules/{ruleId}/diff`
 

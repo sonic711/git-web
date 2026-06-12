@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Batch Version Comparison</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="batch-version-page">
+  <header class="hero">
+    <div>
+      <h1>批次版本比對</h1>
+      <p id="batchPageSubtitle">選擇相同同步規格，一次確認多個專案。</p>
+    </div>
+    <div class="inline-actions">
+      <button type="button" class="secondary" id="refreshSpecsButton">重新載入規格</button>
+      <button type="button" id="startBatchButton">開始比對</button>
+    </div>
+  </header>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
+    <div class="loading-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="loadingMessage">作業中...</div>
+    </div>
+  </div>
+
+  <main class="layout">
+    <section class="panel batch-version-controls">
+      <label>同步規格
+        <select id="batchSpecSelect"></select>
+      </label>
+      <label>結果狀態
+        <select id="batchStatusFilter">
+          <option value="all">全部狀態</option>
+          <option value="IDENTICAL">完全一致</option>
+          <option value="CONTENT_IDENTICAL">內容一致，歷程不同</option>
+          <option value="DIFFERENT">版本不同</option>
+          <option value="TARGET_MISSING">目標分支不存在</option>
+          <option value="CHECK_FAILED">比對失敗</option>
+        </select>
+      </label>
+      <label class="checkbox batch-mismatch-check">
+        <input type="checkbox" id="batchMismatchOnly">
+        只顯示不一致
+      </label>
+      <button type="button" class="secondary" id="rerunBatchButton" disabled>重新比對全部</button>
+    </section>
+
+    <section class="panel">
+      <div class="batch-progress-head">
+        <div>
+          <h2 id="batchJobTitle">尚未開始比對</h2>
+          <p id="batchJobMeta" class="panel-copy">請先選擇同步規格。</p>
+        </div>
+        <strong id="batchProgressText">0 / 0</strong>
+      </div>
+      <div class="batch-progress-track" aria-hidden="true">
+        <div id="batchProgressBar" class="batch-progress-bar"></div>
+      </div>
+    </section>
+
+    <section class="panel batch-results-panel">
+      <div id="batchResultSummary" class="panel-copy">尚無比對結果</div>
+      <div class="batch-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>專案 / Rule</th>
+              <th>來源</th>
+              <th>目標</th>
+              <th>判定</th>
+              <th>時間</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="batchResultRows">
+            <tr><td colspan="6" class="empty">尚無比對結果</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/batch-version.js"></script>
+</body>
+</html>

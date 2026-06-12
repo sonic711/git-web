@@ -52,6 +52,7 @@
 - `download-only` rule 可選填 `downloadWorkspaceRoot` 覆寫下載主目錄；未設定時使用全域 `localWorkspaceRoot`。此欄位屬於本機路徑，匯出設定檔時會移除。
 - sync rule 的版本一致性需同時比較 commit hash 與 tree hash；tree 相同代表程式內容一致，即使 cherry-pick 造成 commit hash 不同。
 - Projects 列表已新增規則篩選列，包含關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常。
+- 批次版本比對依 `sourceBranch + targetRemoteId + targetBranch` 動態分組，不新增重複設定；結果需包含 commit、tree 與指向 HEAD 的遠端 tags。
 - 規則篩選屬於本機 UI 偏好，保存於瀏覽器 `localStorage`，不得寫入或匯出主設定檔。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。
@@ -87,6 +88,7 @@
 - Phase 2 差異快取：[docs/11-phase-2-diff-cache.md](/Users/sonic711/Desktop/development/git-web/docs/11-phase-2-diff-cache.md)
 - Phase 2 版本一致性比對：[docs/12-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/12-version-comparison.md)
 - Phase 2 規則篩選：[docs/13-rule-filtering.md](/Users/sonic711/Desktop/development/git-web/docs/13-rule-filtering.md)
+- Phase 2 批次版本比對：[docs/14-batch-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/14-batch-version-comparison.md)
 
 ## 目前設定檔策略
 
@@ -197,3 +199,4 @@
 - UI 已新增 `版本比對` 操作與結果視窗；只有 `DIFFERENT` 狀態可直接進入既有差異檢視流程，完整執行結果會寫入當日 log。
 - 已實作 Projects 規則篩選：支援關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常，條件採 AND，偏好保存於瀏覽器 `localStorage`。
 - 篩選期間符合的專案會強制展開且收合按鈕 disabled，清除篩選後恢復原本收合狀態；規則與 Remote 表格在窄螢幕改為容器內水平捲動。
+- 已實作批次版本比對：依來源分支、目標 Remote 與目標分支動態分組，以背景 job 最多並行比對 4 個不同 repo，結果頁顯示 commit、tree、HEAD tags、進度、篩選與單筆重試。

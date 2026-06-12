@@ -153,6 +153,21 @@
 
 篩選只改變畫面顯示，不修改 project、rule、排程或 runtime state。自動刷新執行結果時，既有篩選條件必須保留。
 
+## 情境 12：批次確認相同同步規格的多個專案
+
+當多個專案都有相同的同步需求，例如 `uat -> UAT remote / uat`：
+
+1. 使用者開啟批次版本比對頁。
+2. 系統依來源 branch、目標 Remote Tab、目標 branch 將既有 sync rules 動態分組。
+3. 使用者選擇一組規格並開始比對。
+4. 後端建立背景 job，不阻塞頁面 HTTP request。
+5. 不同本地 repo 可有限度並行；同一本地 repo 仍需使用既有 repo lock。
+6. UI 持續顯示完成筆數與逐筆結果。
+7. 每筆結果顯示來源 / 目標 commit hash、HEAD tags、tree 是否一致及比對狀態。
+8. 使用者可只顯示不一致或失敗項目，並可從單筆結果進入既有差異頁。
+
+Tag 只顯示直接指向該 branch HEAD commit 的遠端 tags，不以 tag 建立日期推測版本。
+
 ## 單筆同步標準流程
 
 1. 使用者在列表頁選擇一筆 rule。

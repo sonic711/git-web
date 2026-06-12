@@ -4,3 +4,4 @@ state/
 cache/
 config/settings.json
 .DS_Store
+*.swp

@@ -81,6 +81,16 @@
 - 取得 source / target tree hash
 - 計算 `sourceOnlyCommits` 與 `targetOnlyCommits`
 - 回傳 `IDENTICAL`、`CONTENT_IDENTICAL`、`DIFFERENT`、`TARGET_MISSING` 或 `CHECK_FAILED`
+- 取得來源與目標 remote 中指向 branch HEAD commit 的 tag 名稱
+
+### `BatchVersionComparisonService`
+
+職責：
+
+- 管理記憶體內批次比較 jobs
+- 保存規格、總筆數、完成筆數與逐筆結果
+- 支援多 worker 安全更新進度
+- 服務重啟後不保留歷史 jobs
 
 ### `SyncService`
 

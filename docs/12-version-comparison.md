@@ -13,6 +13,7 @@
 - 最新 commit hash
 - 最新 tree hash
 - 雙方各自獨有的 commit 數量
+- 指向各自 branch HEAD 的遠端 tags
 
 建議 Git 指令：
 
@@ -87,8 +88,9 @@ git rev-list --left-right --count <targetRef>...<sourceRef>
 4. 後端 fetch 最新來源 branch 與目標 branch。
 5. 後端取得雙方 commit hash 與 tree hash。
 6. 後端計算 `targetOnlyCommits` 與 `sourceOnlyCommits`。
-7. 後端依狀態判定規則回傳結果。
-8. UI 顯示摘要、完整 hash 與檢查時間。
+7. 後端以 `git ls-remote --tags` 取得直接或 annotated tag peel 後指向 HEAD 的 tags。
+8. 後端依狀態判定規則回傳結果。
+9. UI 顯示摘要、完整 hash、HEAD tags 與檢查時間。
 
 ## 後續：同步完成後自動檢查
 
@@ -111,6 +113,8 @@ git rev-list --left-right --count <targetRef>...<sourceRef>
 - source tree hash / target tree hash
 - `sourceOnlyCommits`
 - `targetOnlyCommits`
+- source / target HEAD tags
+- tags 是否相同
 
 建議狀態文案：
 
@@ -144,17 +148,20 @@ POST /api/rules/{ruleId}/version-compare
   "targetCommit": "2222222222222222222222222222222222222222",
   "sourceTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "targetTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceTags": ["release-1.2.0"],
+  "targetTags": ["release-1.2.0"],
   "sourceOnlyCommits": 2,
   "targetOnlyCommits": 0,
   "commitIdentical": false,
   "contentIdentical": true,
+  "tagsIdentical": true,
   "message": "Content is identical, but commit history differs"
 }
 ```
 
 ## 非目標
 
-- 不以 tag 判斷 branch 程式內容是否一致
+- 不以 tag 取代 commit / tree 的程式內容判定；tag 差異只作獨立警示
 - 不因 tree hash 不同而自動 force push
 - 不自動合併來源與目標差異
 - 不以檔案時間或工作目錄修改時間作為版本依據

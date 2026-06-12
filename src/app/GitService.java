@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 final class GitService {
     private static final String EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -74,11 +75,16 @@ final class GitService {
             "git", "fetch", "origin",
             "+refs/heads/" + rule.sourceBranch + ":" + sourceRef));
 
+        String sourceCommit = resolveRevision(repoPath, sourceRef);
+        String sourceTree = resolveRevision(repoPath, sourceRef + "^{tree}");
+        List<String> sourceTags = remoteTagsAtCommit(repoPath, "origin", sourceCommit);
+
         GitCommandResult targetBranch = runner.run(repoPath,
             List.of("git", "ls-remote", "--exit-code", internalRemote, "refs/heads/" + rule.targetBranch));
         if (targetBranch.exitCode == 2) {
             return versionComparisonResponse(config, project, rule, "TARGET_MISSING",
-                null, null, null, null, 0, 0, false, false, "Target branch does not exist");
+                sourceCommit, null, sourceTree, null, sourceTags, List.of(),
+                0, 0, false, false, false, "Target branch does not exist");
         }
         if (!targetBranch.isSuccess()) {
             throw gitCommandException(targetBranch);
@@ -88,16 +94,16 @@ final class GitService {
             "git", "fetch", internalRemote,
             "+refs/heads/" + rule.targetBranch + ":" + targetRef));
 
-        String sourceCommit = resolveRevision(repoPath, sourceRef);
         String targetCommit = resolveRevision(repoPath, targetRef);
-        String sourceTree = resolveRevision(repoPath, sourceRef + "^{tree}");
         String targetTree = resolveRevision(repoPath, targetRef + "^{tree}");
+        List<String> targetTags = remoteTagsAtCommit(repoPath, internalRemote, targetCommit);
         GitCommandResult commitCounts = runChecked(repoPath,
             List.of("git", "rev-list", "--left-right", "--count", targetRef + "..." + sourceRef));
         int[] counts = parseCommitCounts(commitCounts.stdout);
 
         boolean commitIdentical = sourceCommit.equals(targetCommit);
         boolean contentIdentical = sourceTree.equals(targetTree);
+        boolean tagsIdentical = sourceTags.equals(targetTags);
         String status = commitIdentical && contentIdentical ? "IDENTICAL"
             : contentIdentical ? "CONTENT_IDENTICAL"
             : "DIFFERENT";
@@ -106,8 +112,8 @@ final class GitService {
             : "Source and target content differ";
 
         return versionComparisonResponse(config, project, rule, status,
-            sourceCommit, targetCommit, sourceTree, targetTree,
-            counts[1], counts[0], commitIdentical, contentIdentical, message);
+            sourceCommit, targetCommit, sourceTree, targetTree, sourceTags, targetTags,
+            counts[1], counts[0], commitIdentical, contentIdentical, tagsIdentical, message);
     }
 
     Map<String, Object> diff(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
@@ -579,11 +585,30 @@ final class GitService {
         return new int[] {Integer.parseInt(parts[0]), Integer.parseInt(parts[1])};
     }
 
+    private List<String> remoteTagsAtCommit(Path repoPath, String remoteName, String commit)
+        throws IOException, InterruptedException {
+        GitCommandResult result = runChecked(repoPath, List.of("git", "ls-remote", "--tags", remoteName));
+        Set<String> tags = new TreeSet<>();
+        for (String line : result.stdout.split("\\R")) {
+            String[] parts = line.trim().split("\\s+", 2);
+            if (parts.length != 2 || !commit.equals(parts[0]) || !parts[1].startsWith("refs/tags/")) {
+                continue;
+            }
+            String tag = parts[1].substring("refs/tags/".length());
+            if (tag.endsWith("^{}")) {
+                tag = tag.substring(0, tag.length() - 3);
+            }
+            tags.add(tag);
+        }
+        return new ArrayList<>(tags);
+    }
+
     private Map<String, Object> versionComparisonResponse(AppConfig config, ProjectConfig project, RuleConfig rule,
                                                           String status, String sourceCommit, String targetCommit,
-                                                          String sourceTree, String targetTree, int sourceOnlyCommits,
+                                                          String sourceTree, String targetTree, List<String> sourceTags,
+                                                          List<String> targetTags, int sourceOnlyCommits,
                                                           int targetOnlyCommits, boolean commitIdentical,
-                                                          boolean contentIdentical, String message) {
+                                                          boolean contentIdentical, boolean tagsIdentical, String message) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("projectId", project.id);
         response.put("projectName", project.name);
@@ -599,10 +624,13 @@ final class GitService {
         response.put("targetCommit", targetCommit);
         response.put("sourceTree", sourceTree);
         response.put("targetTree", targetTree);
+        response.put("sourceTags", new ArrayList<>(sourceTags));
+        response.put("targetTags", new ArrayList<>(targetTags));
         response.put("sourceOnlyCommits", sourceOnlyCommits);
         response.put("targetOnlyCommits", targetOnlyCommits);
         response.put("commitIdentical", commitIdentical);
         response.put("contentIdentical", contentIdentical);
+        response.put("tagsIdentical", tagsIdentical);
         response.put("message", message);
         return response;
     }

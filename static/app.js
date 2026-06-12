@@ -322,6 +322,14 @@ function clearRuleFilters() {
   renderProjects();
 }
 
+function openBatchVersionComparison() {
+  const popup = window.open('/batch-version.html', 'batch-version-comparison',
+    'popup=yes,width=1540,height=980,resizable=yes,scrollbars=yes');
+  if (!popup) {
+    showToast('瀏覽器阻擋了批次版本比對視窗，請允許彈出視窗後重試', 'error');
+  }
+}
+
 function toggleProjectCollapse(projectId) {
   state.collapsedProjects[projectId] = !state.collapsedProjects[projectId];
   renderProjects();
@@ -1227,6 +1235,7 @@ document.getElementById('exportConfigButton').addEventListener('click', exportCo
 document.getElementById('importConfigButton').addEventListener('click', promptImportConfig);
 document.getElementById('importConfigFile').addEventListener('change', importConfigFile);
 document.getElementById('newProjectButton').addEventListener('click', newProject);
+document.getElementById('batchVersionCompareButton').addEventListener('click', openBatchVersionComparison);
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
 document.getElementById('refreshButton').addEventListener('click', () => loadAll());
 document.getElementById('ruleFilterKeyword').addEventListener('input', event => {

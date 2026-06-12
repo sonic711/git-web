@@ -13,6 +13,7 @@
 5. Diff / Review 頁
 6. 執行結果 / Log 頁
 7. 版本比對結果 modal / panel
+8. 批次版本比對頁
 
 ## 1. Mapping 列表頁
 
@@ -150,6 +151,50 @@
 4. tree 不同時顯示「版本不同」，並提供 `查看差異` 入口
 5. 比對失敗時列表只顯示簡短錯誤，完整錯誤需可透過 tooltip 或 log 查看
 6. 詳細判定與 API 契約見 `docs/12-version-comparison.md`
+
+## 批次版本比對頁
+
+入口：
+
+- Projects 區新增 `批次版本比對` 按鈕，開啟獨立頁面。
+
+控制項：
+
+- 同步規格下拉選單
+- `開始比對`
+- `重新比對全部`
+- `只顯示不一致` checkbox
+- 結果狀態篩選
+
+規格顯示格式：
+
+```text
+uat -> UAT / uat（12 個專案）
+```
+
+結果欄位：
+
+- 專案名稱
+- rule 名稱
+- source / target branch
+- source / target commit hash
+- source / target HEAD tags
+- commit 是否相同
+- tree / 程式內容是否相同
+- tag 是否相同
+- 最終狀態
+- 比對時間
+- 操作：查看差異、單筆重新比對
+
+互動規則：
+
+1. 建立 job 後立即顯示總筆數與 `0 / N` 進度。
+2. polling 期間逐筆追加或更新結果，不需等待整批完成。
+3. `IDENTICAL` 與 `CONTENT_IDENTICAL` 視為程式內容一致。
+4. commit 相同但 HEAD tags 不同時，需獨立標示 tag 不同，不改寫 tree 判定。
+5. `TARGET_MISSING`、`DIFFERENT`、`CHECK_FAILED` 歸類為不一致。
+6. hash 預設顯示短值，完整值可透過 title / tooltip 查看。
+7. 頁面重新整理後若 job 仍存在，可用 URL 中的 `jobId` 恢復；服務重啟後 job 不存在則提示重新執行。
 
 ## Settings 區
 

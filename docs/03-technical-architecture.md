@@ -63,6 +63,7 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 - 觸發單筆同步
 - 顯示執行結果與 log
 - 在瀏覽器端篩選 Projects 與 rules
+- 建立並輪詢批次版本比對背景 job
 
 限制：
 
@@ -76,6 +77,17 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 - 篩選偏好不得寫入 `config/settings.json`、匯出設定檔或 runtime state。
 - 後端資料自動刷新後，前端需以原篩選條件重新計算結果。
 - 第一版不處理跨瀏覽器或跨電腦同步 UI 偏好。
+
+### 批次版本比對
+
+- 相同規格 key：`sourceBranch + targetRemoteId + targetBranch`
+- 規格從現有 enabled sync rules 動態產生，不寫入設定檔
+- 批次 API 建立記憶體內 background job，立即回傳 `jobId`
+- 最多同時執行 4 筆不同 repo 的比較
+- 每筆比較仍使用既有 repo lock，避免與同步或另一筆規則同時操作相同工作目錄
+- job 結果隨每筆完成更新，前端以 polling 顯示進度
+- 服務重啟後記憶體內批次 job 不保留，使用者可重新執行
+- tag 透過來源與目標 remote 的 tag refs 判斷，只回傳指向 branch HEAD commit 的 tag 名稱
 
 ## 2. Java 17 Git Bridge Service
 

@@ -843,3 +843,101 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+.tag.warning {
+  background: #fff1c7;
+  color: #765200;
+}
+
+.batch-version-page .layout {
+  max-width: 1600px;
+}
+
+.batch-version-controls {
+  display: grid;
+  grid-template-columns: minmax(320px, 2fr) minmax(220px, 1fr) auto auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.batch-version-controls label:not(.checkbox) {
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.batch-mismatch-check {
+  min-height: 42px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.batch-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.batch-progress-head h2 {
+  margin: 0 0 6px;
+}
+
+.batch-progress-track {
+  height: 12px;
+  margin-top: 16px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ede4d5;
+}
+
+.batch-progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #d49a2f);
+  transition: width 240ms ease;
+}
+
+.batch-results-panel {
+  min-width: 0;
+}
+
+.batch-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.batch-table-wrap table {
+  min-width: 1080px;
+}
+
+.batch-ref-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+}
+
+.batch-ref-cell span:last-child {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .batch-version-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .batch-version-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-progress-head {
+    display: grid;
+  }
+}

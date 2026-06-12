@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.swing.JFrame;
 import javax.swing.JFileChooser;
@@ -38,9 +39,11 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private final DiffCacheService diffCacheService;
     private final SchedulerService schedulerService;
     private final SyncJobService syncJobService;
+    private final BatchVersionComparisonService batchVersionComparisonService;
     private final Path staticDir;
     private final Map<String, ReentrantLock> repoLocks = new ConcurrentHashMap<>();
     private final ExecutorService syncExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService versionComparisonExecutor = Executors.newFixedThreadPool(4);
     private HttpServer server;
 
     AppServer(ConfigService configService, RuntimeStateService runtimeStateService, GitService gitService, LogService logService,
@@ -52,6 +55,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         this.diffCacheService = diffCacheService;
         this.staticDir = staticDir;
         this.syncJobService = new SyncJobService();
+        this.batchVersionComparisonService = new BatchVersionComparisonService();
         this.schedulerService = new SchedulerService(configService, runtimeStateService, this);
     }
 
@@ -64,6 +68,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         server.createContext("/api/projects", this::handleProjects);
         server.createContext("/api/rules", this::handleRules);
         server.createContext("/api/sync-jobs", this::handleSyncJobs);
+        server.createContext("/api/version-comparison", this::handleVersionComparison);
         server.createContext("/api/schedules", this::handleSchedules);
         server.createContext("/api/logs", this::handleLogs);
         server.createContext("/", this::handleStatic);
@@ -82,6 +87,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         }
         schedulerService.stop();
         syncExecutor.shutdownNow();
+        versionComparisonExecutor.shutdownNow();
     }
 
     @Override
@@ -417,6 +423,174 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         }
     }
 
+    private void handleVersionComparison(HttpExchange exchange) throws IOException {
+        try {
+            String path = exchange.getRequestURI().getPath();
+            String method = exchange.getRequestMethod();
+            if ("GET".equals(method) && "/api/version-comparison/specs".equals(path)) {
+                HttpUtil.sendJson(exchange, 200, versionComparisonSpecs());
+                return;
+            }
+            if ("POST".equals(method) && "/api/version-comparison/jobs".equals(path)) {
+                Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                HttpUtil.sendJson(exchange, 202, enqueueBatchVersionComparison(
+                    Models.stringValue(body.get("sourceBranch")),
+                    Models.stringValue(body.get("targetRemoteId")),
+                    Models.stringValue(body.get("targetBranch"))));
+                return;
+            }
+
+            String[] parts = path.split("/");
+            if (parts.length == 5 && "api".equals(parts[1]) && "version-comparison".equals(parts[2])
+                && "jobs".equals(parts[3]) && "GET".equals(method)) {
+                BatchVersionComparisonService.BatchJob job = batchVersionComparisonService.get(parts[4]);
+                if (job == null) {
+                    HttpUtil.sendJson(exchange, 404,
+                        HttpUtil.error("NOT_FOUND", "Version comparison job not found", Map.of("jobId", parts[4])));
+                    return;
+                }
+                HttpUtil.sendJson(exchange, 200, job.toMap());
+                return;
+            }
+            if (parts.length == 7 && "api".equals(parts[1]) && "version-comparison".equals(parts[2])
+                && "jobs".equals(parts[3]) && "rules".equals(parts[5]) && "POST".equals(method)) {
+                BatchVersionComparisonService.BatchJob job = batchVersionComparisonService.get(parts[4]);
+                if (job == null) {
+                    HttpUtil.sendJson(exchange, 404,
+                        HttpUtil.error("NOT_FOUND", "Version comparison job not found", Map.of("jobId", parts[4])));
+                    return;
+                }
+                String ruleId = parts[6];
+                Models.require(job.isCompleted(), "Batch comparison job is still running");
+                Models.require(job.containsRule(ruleId), "Rule does not belong to this batch job");
+                job.markRunning();
+                versionComparisonExecutor.submit(() -> {
+                    compareBatchVersionRule(job, ruleId, true);
+                    job.markCompleted();
+                });
+                HttpUtil.sendJson(exchange, 202, job.toMap());
+                return;
+            }
+            HttpUtil.sendJson(exchange, 404, HttpUtil.error("NOT_FOUND", "Route not found", Map.of("path", path)));
+        } catch (Exception exception) {
+            HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
+        }
+    }
+
+    private List<Object> versionComparisonSpecs() {
+        AppConfig config = configService.getConfig();
+        Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
+        for (ProjectConfig project : config.projects) {
+            if (!project.enabled) {
+                continue;
+            }
+            for (RuleConfig rule : project.rules) {
+                if (!rule.enabled || !rule.isSyncMode()) {
+                    continue;
+                }
+                String key = rule.sourceBranch + "|" + rule.targetRemoteId + "|" + rule.targetBranch;
+                Map<String, Object> item = grouped.computeIfAbsent(key, ignored -> {
+                    RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
+                    Map<String, Object> spec = new LinkedHashMap<>();
+                    spec.put("key", key);
+                    spec.put("sourceBranch", rule.sourceBranch);
+                    spec.put("targetRemoteId", rule.targetRemoteId);
+                    spec.put("targetRemoteName", remote.name);
+                    spec.put("targetBranch", rule.targetBranch);
+                    spec.put("ruleCount", 0);
+                    return spec;
+                });
+                item.put("ruleCount", Models.intValue(item.get("ruleCount")) + 1);
+            }
+        }
+        return new ArrayList<>(grouped.values());
+    }
+
+    private Map<String, Object> enqueueBatchVersionComparison(String sourceBranch, String targetRemoteId,
+                                                               String targetBranch) {
+        AppConfig config = configService.getConfig();
+        RemoteConfig remote = Models.findRemote(config, targetRemoteId);
+        List<String> ruleIds = new ArrayList<>();
+        for (ProjectConfig project : config.projects) {
+            if (!project.enabled) {
+                continue;
+            }
+            for (RuleConfig rule : project.rules) {
+                if (rule.enabled && rule.isSyncMode()
+                    && Objects.equals(sourceBranch, rule.sourceBranch)
+                    && Objects.equals(targetRemoteId, rule.targetRemoteId)
+                    && Objects.equals(targetBranch, rule.targetBranch)) {
+                    ruleIds.add(rule.id);
+                }
+            }
+        }
+        Models.require(!ruleIds.isEmpty(), "No enabled sync rules match this comparison spec");
+        BatchVersionComparisonService.BatchJob job = batchVersionComparisonService.create(
+            sourceBranch, targetRemoteId, remote.name, targetBranch, ruleIds);
+        syncExecutor.submit(() -> runBatchVersionComparison(job));
+        return job.toMap();
+    }
+
+    private void runBatchVersionComparison(BatchVersionComparisonService.BatchJob job) {
+        job.markRunning();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (String ruleId : job.ruleIds()) {
+            futures.add(CompletableFuture.runAsync(
+                () -> compareBatchVersionRule(job, ruleId, false), versionComparisonExecutor));
+        }
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+        job.markCompleted();
+    }
+
+    private void compareBatchVersionRule(BatchVersionComparisonService.BatchJob job, String ruleId, boolean replace) {
+        Map<String, Object> result;
+        try {
+            result = versionCompare(ruleId);
+        } catch (Throwable exception) {
+            result = failedVersionComparison(ruleId, exception);
+        }
+        if (replace) {
+            job.replaceResult(ruleId, result);
+        } else {
+            job.addResult(result);
+        }
+    }
+
+    private Map<String, Object> failedVersionComparison(String ruleId, Throwable exception) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
+            result.put("projectId", selection.project.id);
+            result.put("projectName", selection.project.name);
+            result.put("ruleName", selection.rule.name);
+            result.put("sourceBranch", selection.rule.sourceBranch);
+            result.put("targetBranch", selection.rule.targetBranch);
+        } catch (Exception ignored) {
+            result.put("projectId", "");
+            result.put("projectName", "");
+            result.put("ruleName", ruleId);
+            result.put("sourceBranch", "");
+            result.put("targetBranch", "");
+        }
+        result.put("ruleId", ruleId);
+        result.put("status", "CHECK_FAILED");
+        result.put("checkedAt", Models.nowIso());
+        result.put("sourceCommit", null);
+        result.put("targetCommit", null);
+        result.put("sourceTree", null);
+        result.put("targetTree", null);
+        result.put("sourceTags", List.of());
+        result.put("targetTags", List.of());
+        result.put("sourceOnlyCommits", 0);
+        result.put("targetOnlyCommits", 0);
+        result.put("commitIdentical", false);
+        result.put("contentIdentical", false);
+        result.put("tagsIdentical", false);
+        result.put("message", "Version comparison failed. See log for details.");
+        result.put("error", Models.firstNonBlank(exception.getMessage(), exception.getClass().getName()));
+        return result;
+    }
+
     private void handleSchedules(HttpExchange exchange) throws IOException {
         try {
             if (!"GET".equals(exchange.getRequestMethod())) {
@@ -665,10 +839,13 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             result.put("targetCommit", null);
             result.put("sourceTree", null);
             result.put("targetTree", null);
+            result.put("sourceTags", List.of());
+            result.put("targetTags", List.of());
             result.put("sourceOnlyCommits", 0);
             result.put("targetOnlyCommits", 0);
             result.put("commitIdentical", false);
             result.put("contentIdentical", false);
+            result.put("tagsIdentical", false);
             result.put("message", "Version comparison failed. See log for details.");
             result.put("logPath", logPath);
             return result;
