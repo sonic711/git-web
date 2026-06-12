@@ -139,7 +139,7 @@ function selectedSpec() {
 
 async function startBatch(specOverride = null) {
   const spec = specOverride || selectedSpec();
-  if (!spec) {
+  if (!spec?.sourceBranch || !spec?.targetRemoteId || !spec?.targetBranch) {
     showToast('請先選擇同步規格', 'error');
     return;
   }
@@ -324,7 +324,7 @@ function openDiff(ruleId) {
 }
 
 document.getElementById('refreshSpecsButton').addEventListener('click', loadSpecs);
-document.getElementById('startBatchButton').addEventListener('click', startBatch);
+document.getElementById('startBatchButton').addEventListener('click', () => startBatch());
 document.getElementById('rerunBatchButton').addEventListener('click', rerunBatch);
 document.getElementById('batchStatusFilter').addEventListener('change', renderResults);
 document.getElementById('batchMismatchOnly').addEventListener('change', renderResults);
