@@ -53,6 +53,7 @@
 - sync rule 的版本一致性需同時比較 commit hash 與 tree hash；tree 相同代表程式內容一致，即使 cherry-pick 造成 commit hash 不同。
 - Projects 列表已新增規則篩選列，包含關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常。
 - 批次版本比對依 `sourceBranch + targetRemoteId + targetBranch` 動態分組，不新增重複設定；結果需包含 commit、tree 與指向 HEAD 的遠端 tags。
+- 版本比對的 tag 查詢屬於輔助資訊；`git ls-remote --tags` timeout 時仍需保留 commit/tree 結果，UI 顯示 Tag 無法確認，不得整筆改為 `CHECK_FAILED`。
 - 規則篩選屬於本機 UI 偏好，保存於瀏覽器 `localStorage`，不得寫入或匯出主設定檔。
 - `config/settings.json` 不應再被 git 追蹤，repo 只保留 `config/settings.example.json`。
 - 服務啟動 port 不應寫死在程式中，需可由 `run.sh`、`run.bat`、`run.ps1` 內參數調整，預設為 `8080`。

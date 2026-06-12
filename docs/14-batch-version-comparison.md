@@ -40,9 +40,13 @@ Tag 定義為遠端 tag refs 中直接或經 annotated tag peel 後指向該 bra
 
 另回傳：
 
-- `tagsIdentical=true/false`
+- `tagsIdentical=true/false/null`
+- `sourceTagCheckStatus=SUCCESS/FAILED/NOT_CHECKED`
+- `targetTagCheckStatus=SUCCESS/FAILED/NOT_CHECKED`
+- `tagCheckMessage`
 
 Tag 差異是輔助警示，不取代 commit / tree 判定。例如 commit 與 tree 相同但 tags 不同，狀態仍可為 `IDENTICAL`，畫面另標示 `Tag 不同`。
+若 tag 查詢 timeout，commit / tree 結果仍需顯示，tag 則標示為 `無法確認`。
 
 ## 背景 job
 
@@ -76,6 +80,7 @@ Job 只保存在記憶體；服務重啟後可重新執行。
 - `TARGET_MISSING`
 - `CHECK_FAILED`
 - `tagsIdentical=false`
+- `tagsIdentical=null`
 
 `CONTENT_IDENTICAL` 的 commit 歷程不同但 tree 相同，預設歸類為內容一致；畫面仍需明確標示歷程不同。
 

@@ -355,14 +355,19 @@
   "targetTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "sourceTags": ["release-1.2.0"],
   "targetTags": ["release-1.2.0"],
+  "sourceTagCheckStatus": "SUCCESS",
+  "targetTagCheckStatus": "SUCCESS",
   "sourceOnlyCommits": 2,
   "targetOnlyCommits": 0,
   "commitIdentical": false,
   "contentIdentical": true,
   "tagsIdentical": true,
+  "tagCheckMessage": null,
   "message": "Content is identical, but commit history differs"
 }
 ```
+
+Tag 查詢失敗時不影響 commit / tree 狀態；`tagsIdentical` 為 `null`，完整 tag 錯誤放在 `tagCheckMessage`。
 
 完整規格見 `docs/12-version-comparison.md`。
 

@@ -103,7 +103,9 @@ function tagsText(tags) {
 }
 
 function isMismatch(result) {
-  return !['IDENTICAL', 'CONTENT_IDENTICAL'].includes(result.status) || result.tagsIdentical === false;
+  return !['IDENTICAL', 'CONTENT_IDENTICAL'].includes(result.status)
+    || result.tagsIdentical === false
+    || result.tagsIdentical == null;
 }
 
 async function loadSpecs() {
@@ -257,7 +259,12 @@ function renderResults() {
   root.innerHTML = results.map(result => {
     const sourceTags = tagsText(result.sourceTags);
     const targetTags = tagsText(result.targetTags);
-    const tagsClass = result.tagsIdentical ? 'success' : 'failed';
+    const tagsAvailable = result.tagsIdentical != null;
+    const tagsClass = !tagsAvailable ? 'warning' : result.tagsIdentical ? 'success' : 'failed';
+    const tagsLabel = !tagsAvailable ? '無法確認' : result.tagsIdentical ? '相同' : '不同';
+    const sourceTagText = result.sourceTagCheckStatus === 'FAILED' ? '查詢失敗' : sourceTags;
+    const targetTagText = result.targetTagCheckStatus === 'FAILED' ? '查詢失敗' : targetTags;
+    const tagCheckMessage = result.tagCheckMessage || '';
     return `
       <tr>
         <td>
@@ -270,14 +277,18 @@ function renderResults() {
           <div class="batch-ref-cell">
             <span>${escapeHtml(result.sourceBranch || '-')}</span>
             <code title="${escapeAttr(result.sourceCommit || '')}">${escapeHtml(shortHash(result.sourceCommit))}</code>
-            <span title="${escapeAttr(sourceTags)}">Tag: ${escapeHtml(sourceTags)}</span>
+            <span title="${escapeAttr(result.sourceTagCheckStatus === 'FAILED' ? tagCheckMessage : sourceTags)}">
+              Tag: ${escapeHtml(sourceTagText)}
+            </span>
           </div>
         </td>
         <td>
           <div class="batch-ref-cell">
             <span>${escapeHtml(result.targetBranch || '-')}</span>
             <code title="${escapeAttr(result.targetCommit || '')}">${escapeHtml(shortHash(result.targetCommit))}</code>
-            <span title="${escapeAttr(targetTags)}">Tag: ${escapeHtml(targetTags)}</span>
+            <span title="${escapeAttr(result.targetTagCheckStatus === 'FAILED' ? tagCheckMessage : targetTags)}">
+              Tag: ${escapeHtml(targetTagText)}
+            </span>
           </div>
         </td>
         <td>
@@ -285,7 +296,7 @@ function renderResults() {
             <span class="tag ${statusClass(result.status)}">${escapeHtml(statusLabel(result.status))}</span>
             <span>Commit: ${result.commitIdentical ? '相同' : '不同'}</span>
             <span>內容: ${result.contentIdentical ? '相同' : '不同'}</span>
-            <span class="tag ${tagsClass}">Tag: ${result.tagsIdentical ? '相同' : '不同'}</span>
+            <span class="tag ${tagsClass}" title="${escapeAttr(tagCheckMessage)}">Tag: ${tagsLabel}</span>
           </div>
         </td>
         <td>${escapeHtml(formatDateTime(result.checkedAt))}</td>

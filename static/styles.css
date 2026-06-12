@@ -550,6 +550,15 @@ th {
   font-weight: 700;
 }
 
+.version-tag-warning {
+  padding: 10px 12px;
+  border: 1px solid #e0bd66;
+  border-radius: 10px;
+  background: #fff4d6;
+  color: #765200;
+  cursor: help;
+}
+
 .version-meta-grid,
 .version-side-grid {
   display: grid;

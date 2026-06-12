@@ -985,15 +985,22 @@ function renderVersionComparison(data) {
         <h3>來源</h3>
         <div class="version-hash-row"><span>Commit</span><code>${versionValue(data.sourceCommit)}</code></div>
         <div class="version-hash-row"><span>Tree</span><code>${versionValue(data.sourceTree)}</code></div>
+        <div class="version-hash-row"><span>Tag</span><code>${data.sourceTagCheckStatus === 'FAILED' ? '查詢失敗' : versionValue((data.sourceTags || []).join(', '))}</code></div>
         <div class="version-count">${Number(data.sourceOnlyCommits || 0)} 個來源獨有 commit</div>
       </section>
       <section class="version-side">
         <h3>目標</h3>
         <div class="version-hash-row"><span>Commit</span><code>${versionValue(data.targetCommit)}</code></div>
         <div class="version-hash-row"><span>Tree</span><code>${versionValue(data.targetTree)}</code></div>
+        <div class="version-hash-row"><span>Tag</span><code>${data.targetTagCheckStatus === 'FAILED' ? '查詢失敗' : versionValue((data.targetTags || []).join(', '))}</code></div>
         <div class="version-count">${Number(data.targetOnlyCommits || 0)} 個目標獨有 commit</div>
       </section>
     </div>
+    ${data.tagCheckMessage ? `
+      <div class="version-tag-warning" title="${escapeAttr(data.tagCheckMessage)}">
+        Tag 查詢失敗，但 commit 與程式內容比對仍已完成。滑鼠移入可查看完整錯誤。
+      </div>
+    ` : ''}
   `;
   document.getElementById('versionCompareDiffButton').disabled = data.status !== 'DIFFERENT';
   document.getElementById('versionCompareLogButton').disabled = !data.logPath;
