@@ -81,6 +81,13 @@
 6. 執行完成後更新 runtime state。
 7. 寫入 log。
 
+下一次排程時間規則：
+
+- 同步成功：`nextRunAt = 本次完成時間 + intervalMinutes`
+- 同步失敗：`nextRunAt = 本次完成時間 + intervalMinutes`
+- 失敗不得將 `nextRunAt` 清空，避免 scheduler 每 30 秒立即重試
+- `manualOnly=true` 或排程未啟用時，`nextRunAt=null`
+
 ## 驗證規則
 
 排程執行前至少驗證：
@@ -119,3 +126,4 @@
 5. UI 修改排程設定後會寫回主設定檔。
 6. 排程執行結果會寫入 log。
 7. 不依賴資料庫。
+8. 同步失敗後仍依設定間隔安排下一次執行，不會密集重試。

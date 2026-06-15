@@ -721,7 +721,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         } catch (RuntimeException exception) {
             String message = Models.firstNonBlank(exception.getMessage(), "Failed to submit sync job");
             syncJobService.markFailed(job.jobId, message, runtimeStateService.getOrCreate(rule.id).lastLogPath);
-            runtimeStateService.markFinished(rule.id, "failed", "manual", null,
+            runtimeStateService.markFinished(rule.id, "failed", "manual", nextScheduledRun(rule),
                 runtimeStateService.getOrCreate(rule.id).lastLogPath, message);
             throw exception;
         }
@@ -743,7 +743,8 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             String message = Models.firstNonBlank(exception.getMessage(), exception.getClass().getName());
             syncJobService.markFailed(jobId, message, logPath);
             try {
-                runtimeStateService.markFinished(job.ruleId, "failed", "manual", null, logPath, message);
+                runtimeStateService.markFinished(job.ruleId, "failed", "manual", nextScheduledRun(job.ruleId), logPath,
+                    message);
             } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
@@ -774,9 +775,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     selectedCommitIds, triggerSource);
                 String logPath = logService.writeLog(runId, result.asLogText(project.id, rule.id, forcePush, reviewConfirmed,
                     triggerSource));
-                String nextRun = rule.manualOnly || !rule.schedule.enabled ? null
-                    : java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8))
-                        .plusMinutes(rule.schedule.intervalMinutes).toString();
+                String nextRun = nextScheduledRun(rule);
                 String message = rule.isDownloadOnly() ? "Download completed" : "Sync completed";
                 runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, message);
                 diffCacheService.markStale(rule.id, message);
@@ -802,11 +801,29 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 return payload;
             } catch (Exception exception) {
                 String logPath = logService.writeLog(runId, "ERROR\n" + exception.getMessage());
-                runtimeStateService.markFinished(rule.id, "failed", triggerSource, null, logPath, exception.getMessage());
+                runtimeStateService.markFinished(rule.id, "failed", triggerSource, nextScheduledRun(rule), logPath,
+                    exception.getMessage());
                 throw exception;
             }
         } finally {
             lock.unlock();
+        }
+    }
+
+    static String nextScheduledRun(RuleConfig rule) {
+        if (rule.manualOnly || !rule.schedule.enabled) {
+            return null;
+        }
+        return java.time.OffsetDateTime.now(java.time.ZoneOffset.ofHours(8))
+            .plusMinutes(rule.schedule.intervalMinutes).toString();
+    }
+
+    private String nextScheduledRun(String ruleId) {
+        try {
+            RuleSelection selection = Models.findRuleSelection(configService.getConfig(), ruleId);
+            return nextScheduledRun(selection.rule);
+        } catch (Exception exception) {
+            return runtimeStateService.getOrCreate(ruleId).nextRunAt;
         }
     }
 

@@ -64,6 +64,7 @@
 - UI 需提供可修改的全局本地主目錄設定，並寫回 `config/settings.json`。
 - UI 已提供設定檔匯出 / 匯入；匯出內容不包含 `localWorkspaceRoot`，避免他機匯入後直接沿用原工作根目錄。
 - 若使用者修改 rule 的排程開關、`manualOnly` 或排程間隔，系統必須先清除舊的 `nextRunAt`，避免沿用修改前的首次觸發時間。
+- 自動或手動同步完成後，只要該 rule 仍啟用排程，無論成功或失敗都以完成時間加上 `intervalMinutes` 設定 `nextRunAt`；失敗不得清空排程時間造成每 30 秒重試。
 - 手動同步不應阻塞 UI；應改成背景 job 模式，讓不同 repo 可並行、同 repo 仍排隊。
 - 同步 branch 時，系統也需將該專案 repo 的 tags 一併推送到目標 remote；一般同步只新增不存在的 tags，勾選 `Force Push` 時才允許移動既有 tags。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
@@ -201,3 +202,4 @@
 - 已實作 Projects 規則篩選：支援關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常，條件採 AND，偏好保存於瀏覽器 `localStorage`。
 - 篩選期間符合的專案會強制展開且收合按鈕 disabled，清除篩選後恢復原本收合狀態；規則與 Remote 表格在窄螢幕改為容器內水平捲動。
 - 已實作批次版本比對：依來源分支、目標 Remote 與目標分支動態分組，以背景 job 最多並行比對 4 個不同 repo，結果頁顯示 commit、tree、HEAD tags、進度、篩選與單筆重試。
+- 修正同步失敗會清空 `nextRunAt` 的問題；所有成功與失敗路徑現在都從本次完成時間加上排程間隔，隔離實測確認失敗後會等待完整間隔而非每 30 秒重試。
