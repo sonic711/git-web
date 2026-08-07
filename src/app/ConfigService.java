@@ -42,10 +42,44 @@ final class ConfigService {
     synchronized void importConfig(Map<String, Object> rawConfig) throws IOException {
         AppConfig imported = AppConfig.fromMap(rawConfig);
         normalizeLegacyConfig(imported);
-        if (imported.localWorkspaceRoot == null || imported.localWorkspaceRoot.isBlank()) {
-            imported.localWorkspaceRoot = current.localWorkspaceRoot;
-        }
+        preserveLocalPathSettings(imported);
         replaceConfig(imported);
+    }
+
+    private void preserveLocalPathSettings(AppConfig imported) {
+        imported.localWorkspaceRoot = Models.firstNonBlank(current.localWorkspaceRoot, imported.localWorkspaceRoot);
+
+        Map<String, String> currentDownloadRootsByRuleKey = new LinkedHashMap<>();
+        Map<String, String> currentDownloadRootsBySignature = new LinkedHashMap<>();
+        for (ProjectConfig project : current.projects) {
+            for (RuleConfig rule : project.rules) {
+                if (!rule.isDownloadOnly() || rule.downloadWorkspaceRoot == null || rule.downloadWorkspaceRoot.isBlank()) {
+                    continue;
+                }
+                currentDownloadRootsByRuleKey.put(downloadRuleKey(project, rule), rule.downloadWorkspaceRoot);
+                currentDownloadRootsBySignature.put(downloadRuleSignature(project, rule), rule.downloadWorkspaceRoot);
+            }
+        }
+
+        for (ProjectConfig project : imported.projects) {
+            for (RuleConfig rule : project.rules) {
+                if (!rule.isDownloadOnly()) {
+                    continue;
+                }
+                rule.downloadWorkspaceRoot = Models.firstNonBlank(
+                    currentDownloadRootsByRuleKey.get(downloadRuleKey(project, rule)),
+                    currentDownloadRootsBySignature.get(downloadRuleSignature(project, rule)),
+                    rule.downloadWorkspaceRoot);
+            }
+        }
+    }
+
+    private String downloadRuleKey(ProjectConfig project, RuleConfig rule) {
+        return project.id + "|" + rule.id;
+    }
+
+    private String downloadRuleSignature(ProjectConfig project, RuleConfig rule) {
+        return project.vendorRepoUrl + "|" + project.localProjectName + "|" + rule.sourceBranch + "|" + rule.mode;
     }
 
     synchronized Map<String, Object> exportConfigMap() {

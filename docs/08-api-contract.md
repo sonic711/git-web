@@ -73,7 +73,7 @@
 用途：
 
 - 匯入主設定檔
-- 若匯入內容未帶 `localWorkspaceRoot`，系統保留本機既有值；若本機也未設定，匯入後需由使用者補上
+- 匯入時 `localWorkspaceRoot` 與 `downloadWorkspaceRoot` 皆視為本機路徑設定；系統優先保留目前機器上的既有值，避免切換或重新匯入設定檔時覆蓋 / 清空本機路徑
 
 請求範例：
 

@@ -250,6 +250,7 @@
 3. 匯入後系統需重新驗證 schema
 4. 匯入成功後需重新載入 remotes、projects、rules 與 scheduler
 5. `state/runtime-state.json` 不可包含在正式匯出中
-6. 若匯入檔未帶 `localWorkspaceRoot`，系統可保留本機既有值；若本機也未設定，使用者需先補上全局本地主目錄
-7. 舊版 `mappings[*]` 設定匯入時可由程式自動轉成 `projects[*].rules[*]`
-8. 舊版 `remotes[*].url` / `group` 設定匯入時可由程式轉成 `baseUrl` 與 `name`
+6. 匯入設定檔時，`localWorkspaceRoot` 與 `downloadWorkspaceRoot` 視為本機路徑設定；系統需優先保留目前機器上的既有值，只有本機原本沒有值時才採用匯入檔中的值
+7. 重新匯入由本系統匯出的設定檔時，不得清空既有 download-only 規則的下載本地主目錄覆寫
+8. 舊版 `mappings[*]` 設定匯入時可由程式自動轉成 `projects[*].rules[*]`
+9. 舊版 `remotes[*].url` / `group` 設定匯入時可由程式轉成 `baseUrl` 與 `name`

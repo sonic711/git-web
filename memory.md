@@ -50,6 +50,7 @@
 - rule 已支援 `mode` 欄位，目前包含 `sync` 與 `download-only`；舊設定缺漏時預設為 `sync`。
 - `download-only` 模式只從廠商 repo 下載並對齊本地來源分支，不建立 target remote，也不 push 到其他 remote；此模式會強制同步來源 remote tags，包含 tag 移動與刪除，但不支援差異 review、Force Push 或 target tags push。
 - `download-only` rule 可選填 `downloadWorkspaceRoot` 覆寫下載主目錄；未設定時使用全域 `localWorkspaceRoot`。此欄位屬於本機路徑，匯出設定檔時會移除。
+- 匯入設定檔時，本機路徑設定需優先保留目前機器既有值，包含全局 `localWorkspaceRoot` 與 download-only rule 的 `downloadWorkspaceRoot`；重新匯入匯出檔不得把既有下載覆寫路徑清空或改回全局路徑。
 - sync rule 的版本一致性需同時比較 commit hash 與 tree hash；tree 相同代表程式內容一致，即使 cherry-pick 造成 commit hash 不同。
 - Projects 列表已新增規則篩選列，包含關鍵字、Remote Tab、規則模式、執行方式、最後狀態與只顯示異常。
 - 批次版本比對依 `sourceBranch + targetRemoteId + targetBranch` 動態分組，不新增重複設定；結果需包含 commit、tree 與指向 HEAD 的遠端 tags。
