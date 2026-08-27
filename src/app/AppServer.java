@@ -776,7 +776,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 String logPath = logService.writeLog(runId, result.asLogText(project.id, rule.id, forcePush, reviewConfirmed,
                     triggerSource));
                 String nextRun = nextScheduledRun(rule);
-                String message = rule.isDownloadOnly() ? "Download completed" : "Sync completed";
+                String message = result.completionMessage(rule.isDownloadOnly() ? "Download completed" : "Sync completed");
                 runtimeStateService.markFinished(rule.id, "success", triggerSource, nextRun, logPath, message);
                 diffCacheService.markStale(rule.id, message);
                 Map<String, Object> payload = new LinkedHashMap<>();

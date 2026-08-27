@@ -529,9 +529,9 @@ job 狀態為 `queued | running | completed`。個別失敗以 result 的 `CHECK
 6. 若同步來源為排程，後端不得對 `manualOnly=true` 的規則執行
 7. `mode=sync` 且帶入 `selectedCommitIds` 時，後端以目標 branch 為基準建立暫時分支並 `cherry-pick` 這批 commit
 8. `selectedCommitIds` 會由後端依來源 branch 歷史順序重新排序後執行
-9. `mode=sync` 時，branch push 成功後，後端會將該 repo 的 tags 一併 push 到目標 remote；一般同步只新增不存在的 tags，`forcePush=true` 才允許移動既有 tags
+9. `mode=sync` 時，前置 fetch 固定使用 `--force --prune-tags` 對齊本機來源 tags。branch push 後一般同步只新增不存在的 tags；`forcePush=true` 時目標 tags 會鏡像來源，包含移動既有 tags 與刪除來源已不存在的 tags
 10. `mode=download-only` 時，不得建立或更新 target remote，也不得執行任何 push
-11. `mode=download-only` 時，後端需以 `git fetch origin --prune --tags --force --prune-tags` 同步來源，讓本地 tags 包含移動與刪除都與來源 remote 一致
+11. `mode=download-only` 時不建立或更新 target remote，也不執行任何 push；前置 fetch 同樣以 `git fetch origin --prune --tags --force --prune-tags` 對齊本機來源 tags
 12. `mode=download-only` 且 `downloadWorkspaceRoot` 不為空時，下載 repo 路徑使用 `downloadWorkspaceRoot/localProjectName`；未設定時使用全域 `localWorkspaceRoot/localProjectName`
 13. 匯出設定檔時，`downloadWorkspaceRoot` 會被移除，避免他機匯入後直接使用本機路徑
 14. 若任一 selected commit 無法乾淨 `cherry-pick` 到目標 branch，本次同步會失敗並中止

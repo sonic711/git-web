@@ -55,7 +55,7 @@
 同步互動：
 
 1. Mapping 建立完成後，應先顯示在列表中
-2. 若 `allowForcePush=true`，列表行內顯示 `Force Push` checkbox
+2. 若 `allowForcePush=true`，列表行內顯示 `Force Push` checkbox；勾選時除 branch force push 外，也允許目標 tags 移動及刪除來源已刪除的 tags
 3. `自動同步` checkbox 直接對應 `schedule.enabled`
 4. `manualOnly=true` 時，`自動同步` checkbox 必須 disabled
 5. 排程執行後 UI 必須自動刷新最後結果與下次執行時間

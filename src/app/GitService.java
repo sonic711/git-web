@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 final class GitService {
@@ -299,9 +300,9 @@ final class GitService {
         Path repoPath = project.localRepoPath(config, rule);
 
         List<GitCommandResult> results = new ArrayList<>();
-        syncVendorBranch(config, project, rule, !downloadOnly && forcePush, downloadOnly, results);
+        syncVendorBranch(config, project, rule, results);
         if (downloadOnly) {
-            return new SyncResult(results, List.of());
+            return new SyncResult(results, List.of(), List.of());
         }
 
         ensureTargetRemote(config, project, rule);
@@ -316,20 +317,21 @@ final class GitService {
                 pushCommand.add("-f");
             }
             pushCommand.add(internalRemote);
-            pushCommand.add(rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
+            // Fully qualify the source to avoid an ambiguous branch/tag name such as "sit".
+            pushCommand.add("refs/heads/" + rule.sourceBranch + ":refs/heads/" + rule.targetBranch);
             results.add(runChecked(repoPath, pushCommand));
         }
-        pushTags(repoPath, internalRemote, forcePush, results);
+        TagSyncSummary tagSummary = syncTags(repoPath, internalRemote, forcePush, results);
 
-        return new SyncResult(results, requestedCommitIds);
+        return new SyncResult(results, requestedCommitIds, tagSummary.notices());
     }
 
-    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, boolean forcePush, boolean exactTags,
-                                  List<GitCommandResult> results)
+    private void syncVendorBranch(AppConfig config, ProjectConfig project, RuleConfig rule, List<GitCommandResult> results)
         throws IOException, InterruptedException {
         Path repoPath = project.localRepoPath(config, rule);
         String originRef = originRef(rule);
-        results.add(fetchOrigin(repoPath, forcePush || exactTags, exactTags));
+        // Local tags are a cache of the vendor remote and must not retain moved or deleted refs.
+        results.add(fetchOrigin(repoPath, true, true));
         results.add(runChecked(repoPath, List.of("git", "rev-parse", "--verify", originRef)));
         results.add(runChecked(repoPath, List.of("git", "checkout", "-B", rule.sourceBranch, "origin/" + rule.sourceBranch)));
         results.add(runChecked(repoPath, List.of("git", "reset", "--hard", originRef)));
@@ -339,7 +341,8 @@ final class GitService {
     private void syncSelectedCommits(Path repoPath, RuleConfig rule, String internalRemote, boolean forcePush,
                                      List<String> selectedCommitIds, List<GitCommandResult> results)
         throws IOException, InterruptedException {
-        results.add(runChecked(repoPath, List.of("git", "fetch", internalRemote, "--prune")));
+        // Target tags must not enter the local source-tag inventory used for reconciliation.
+        results.add(runChecked(repoPath, List.of("git", "fetch", internalRemote, "--prune", "--no-tags")));
         String targetRef = internalRemote + "/" + rule.targetBranch;
         Models.require(branchExists(repoPath, targetRef), "Commit-based sync requires an existing target branch");
 
@@ -362,7 +365,7 @@ final class GitService {
                 pushCommand.add("-f");
             }
             pushCommand.add(internalRemote);
-            pushCommand.add(tempBranch + ":refs/heads/" + rule.targetBranch);
+            pushCommand.add("refs/heads/" + tempBranch + ":refs/heads/" + rule.targetBranch);
             results.add(runChecked(repoPath, pushCommand));
         } catch (IOException | InterruptedException exception) {
             if (cherryPickInProgress) {
@@ -375,17 +378,98 @@ final class GitService {
         }
     }
 
-    private void pushTags(Path repoPath, String internalRemote, boolean forcePush, List<GitCommandResult> results)
+    private TagSyncSummary syncTags(Path repoPath, String internalRemote, boolean forcePush, List<GitCommandResult> results)
         throws IOException, InterruptedException {
-        List<String> pushTagsCommand = new ArrayList<>();
-        pushTagsCommand.add("git");
-        pushTagsCommand.add("push");
-        if (forcePush) {
-            pushTagsCommand.add("-f");
+        Map<String, String> sourceTags = localTagRefs(repoPath, results);
+        Map<String, String> targetTags = remoteTagRefs(repoPath, internalRemote, results);
+        List<String> additions = new ArrayList<>();
+        List<String> changes = new ArrayList<>();
+        List<String> deletions = new ArrayList<>();
+
+        for (Map.Entry<String, String> sourceTag : sourceTags.entrySet()) {
+            String targetObject = targetTags.get(sourceTag.getKey());
+            if (targetObject == null) {
+                additions.add(sourceTag.getKey());
+            } else if (!sourceTag.getValue().equals(targetObject)) {
+                changes.add(sourceTag.getKey());
+            }
         }
-        pushTagsCommand.add(internalRemote);
-        pushTagsCommand.add("--tags");
-        results.add(runChecked(repoPath, pushTagsCommand));
+        for (String targetTag : targetTags.keySet()) {
+            if (!sourceTags.containsKey(targetTag)) {
+                deletions.add(targetTag);
+            }
+        }
+
+        pushTagRefs(repoPath, internalRemote, additions, false, false, results);
+        if (forcePush) {
+            pushTagRefs(repoPath, internalRemote, changes, true, false, results);
+            pushTagRefs(repoPath, internalRemote, deletions, false, true, results);
+            return new TagSyncSummary(List.of());
+        }
+
+        List<String> notices = new ArrayList<>();
+        if (!changes.isEmpty()) {
+            notices.add("Tag updates require Force Push: " + displayTagNames(changes));
+        }
+        if (!deletions.isEmpty()) {
+            notices.add("Tag deletions require Force Push: " + displayTagNames(deletions));
+        }
+        return new TagSyncSummary(notices);
+    }
+
+    private Map<String, String> localTagRefs(Path repoPath, List<GitCommandResult> results)
+        throws IOException, InterruptedException {
+        GitCommandResult result = runner.run(repoPath, List.of("git", "show-ref", "--tags"));
+        results.add(result);
+        if (!result.isSuccess() && result.exitCode != 1) {
+            throw gitCommandException(result);
+        }
+        return parseTagRefs(result.stdout);
+    }
+
+    private Map<String, String> remoteTagRefs(Path repoPath, String internalRemote, List<GitCommandResult> results)
+        throws IOException, InterruptedException {
+        GitCommandResult result = runChecked(repoPath, List.of("git", "ls-remote", "--tags", internalRemote));
+        results.add(result);
+        return parseTagRefs(result.stdout);
+    }
+
+    private Map<String, String> parseTagRefs(String output) {
+        Map<String, String> tags = new TreeMap<>();
+        for (String line : output.split("\\R")) {
+            String[] parts = line.trim().split("\\s+", 2);
+            if (parts.length != 2 || !parts[1].startsWith("refs/tags/") || parts[1].endsWith("^{}")) {
+                continue;
+            }
+            tags.put(parts[1].substring("refs/tags/".length()), parts[0]);
+        }
+        return tags;
+    }
+
+    private void pushTagRefs(Path repoPath, String internalRemote, List<String> tagNames, boolean forcePush, boolean delete,
+                             List<GitCommandResult> results) throws IOException, InterruptedException {
+        if (tagNames.isEmpty()) {
+            return;
+        }
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.add("push");
+        if (forcePush) {
+            command.add("--force");
+        }
+        command.add(internalRemote);
+        for (String tagName : tagNames) {
+            String tagRef = "refs/tags/" + tagName;
+            command.add(delete ? ":" + tagRef : tagRef + ":" + tagRef);
+        }
+        results.add(runChecked(repoPath, command));
+    }
+
+    private String displayTagNames(List<String> tagNames) {
+        int maxShown = 5;
+        List<String> shown = tagNames.subList(0, Math.min(tagNames.size(), maxShown));
+        String text = String.join(", ", shown);
+        return tagNames.size() > maxShown ? text + " (and " + (tagNames.size() - maxShown) + " more)" : text;
     }
 
     private void ensureRepoReady(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
@@ -702,13 +786,22 @@ final class GitService {
     private record DiffOp(char prefix, String line) {
     }
 
+    private record TagSyncSummary(List<String> notices) {
+    }
+
     static final class SyncResult {
         final List<GitCommandResult> commandResults;
         final List<String> selectedCommitIds;
+        final List<String> notices;
 
-        SyncResult(List<GitCommandResult> commandResults, List<String> selectedCommitIds) {
+        SyncResult(List<GitCommandResult> commandResults, List<String> selectedCommitIds, List<String> notices) {
             this.commandResults = commandResults;
             this.selectedCommitIds = selectedCommitIds;
+            this.notices = notices;
+        }
+
+        String completionMessage(String defaultMessage) {
+            return notices.isEmpty() ? defaultMessage : defaultMessage + "; " + String.join("; ", notices);
         }
 
         String asLogText(String projectId, String ruleId, boolean forcePush, boolean reviewConfirmed, String triggerSource) {
@@ -719,6 +812,9 @@ final class GitService {
             builder.append("forcePush=").append(forcePush).append('\n');
             builder.append("reviewConfirmed=").append(reviewConfirmed).append('\n');
             builder.append("selectedCommitIds=").append(selectedCommitIds).append('\n');
+            if (!notices.isEmpty()) {
+                builder.append("notices=").append(notices).append('\n');
+            }
             for (GitCommandResult result : commandResults) {
                 builder.append("\n$ ").append(String.join(" ", result.command)).append('\n');
                 builder.append("exitCode=").append(result.exitCode).append('\n');

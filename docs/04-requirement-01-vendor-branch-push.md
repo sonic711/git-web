@@ -136,7 +136,7 @@
 5. 若不存在，從 `vendorRepoUrl` clone。
 6. 若存在，驗證該目錄是有效 Git repo。
 7. 驗證該 repo 的來源與 `vendorRepoUrl` 相符。
-8. 執行 `git fetch origin --prune --tags`；若本次勾選 `Force Push`，加上 `--force` 以更新本地已移動的 tags。
+8. 執行 `git fetch origin --prune --tags --force --prune-tags`，使本機 tags 完整對齊來源，包含移動與刪除；此操作不等同目標端的 Force Push。
 9. 驗證 `origin/<sourceBranch>` 存在。
 10. 將本地 `sourceBranch` 強制對齊 `origin/<sourceBranch>`，避免廠商 force push 後本地歷程偏移。
 11. 執行 `git pull --ff-only origin <sourceBranch>`。
@@ -145,8 +145,9 @@
 14. 若 rule 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
 15. 允許使用者挑選本次要同步的 commit。
 16. 依 checkbox 狀態決定本次使用一般 push 或 `git push -f`。
-17. branch push 成功後，將該專案 repo 的 tags 一併 push 到目標 remote。一般同步只新增不存在的 tags；勾選 `Force Push` 時才允許移動目標端既有 tags。
-18. 記錄結果並回傳 UI。
+17. branch push 使用 `refs/heads/<sourceBranch>:refs/heads/<targetBranch>`，避免 branch 與 tag 同名造成 refspec 歧義。
+18. branch push 成功後，比對來源與目標 tags。一般同步只新增不存在的 tags；勾選 `Force Push` 時，目標端 tags 會鏡像來源，允許移動既有 tags 並刪除來源已不存在的 tags。
+19. 記錄結果並回傳 UI。
 
 ## Review Gate 流程
 
@@ -173,18 +174,18 @@ commit-based push 限制：
 
 ```bash
 git clone <vendorRepoUrl> <localRepoPath>
-git -C <localRepoPath> fetch origin --prune --tags
-git -C <localRepoPath> fetch origin --prune --tags --force
+git -C <localRepoPath> fetch origin --prune --tags --force --prune-tags
 git -C <localRepoPath> rev-parse --verify refs/remotes/origin/<sourceBranch>
 git -C <localRepoPath> checkout -B <sourceBranch> origin/<sourceBranch>
 git -C <localRepoPath> reset --hard refs/remotes/origin/<sourceBranch>
 git -C <localRepoPath> pull --ff-only origin <sourceBranch>
 git -C <localRepoPath> remote add <generatedTargetRemoteName> <targetUrl>
 git -C <localRepoPath> remote set-url <generatedTargetRemoteName> <targetUrl>
-git -C <localRepoPath> push <generatedTargetRemoteName> <sourceBranch>:refs/heads/<targetBranch>
-git -C <localRepoPath> push -f <generatedTargetRemoteName> <sourceBranch>:refs/heads/<targetBranch>
-git -C <localRepoPath> push <generatedTargetRemoteName> --tags
-git -C <localRepoPath> push -f <generatedTargetRemoteName> --tags
+git -C <localRepoPath> push <generatedTargetRemoteName> refs/heads/<sourceBranch>:refs/heads/<targetBranch>
+git -C <localRepoPath> push -f <generatedTargetRemoteName> refs/heads/<sourceBranch>:refs/heads/<targetBranch>
+git -C <localRepoPath> push <generatedTargetRemoteName> refs/tags/<tag>:refs/tags/<tag>
+git -C <localRepoPath> push -f <generatedTargetRemoteName> refs/tags/<movedTag>:refs/tags/<movedTag>
+git -C <localRepoPath> push <generatedTargetRemoteName> :refs/tags/<deletedSourceTag>
 ```
 
 實際執行時，不需每次都執行 `remote add` 與 `remote set-url`；應由系統判斷 remote 是否已存在後再處理。

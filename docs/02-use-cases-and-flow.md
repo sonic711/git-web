@@ -30,7 +30,7 @@
 若實際 repo 路徑已是有效 Git repo，系統應：
 
 1. 驗證該 repo 與設定相符。
-2. 執行 `fetch origin --prune`。
+2. 執行 `fetch origin --prune --tags --force --prune-tags`，讓本機 tags 完整對齊來源 remote。
 3. 將本地來源分支強制對齊 `origin/<sourceBranch>`。
 4. 執行 `git pull --ff-only origin <sourceBranch>`。
 5. 推送到目標 remote / branch。
@@ -41,7 +41,8 @@
 
 1. 執行前仍做相同驗證。
 2. push 指令附加 `-f`。
-3. UI 必須清楚標示本次使用了強制推送。
+3. 已移動的目標 tag 會被強制更新，來源已刪除的 tag 也會從目標 remote 刪除。
+4. UI 必須清楚標示本次使用了強制推送。
 
 ## 情境 4：一次只執行一筆規則
 

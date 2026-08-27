@@ -67,7 +67,7 @@
 - 若使用者修改 rule 的排程開關、`manualOnly` 或排程間隔，系統必須先清除舊的 `nextRunAt`，避免沿用修改前的首次觸發時間。
 - 自動或手動同步完成後，只要該 rule 仍啟用排程，無論成功或失敗都以完成時間加上 `intervalMinutes` 設定 `nextRunAt`；失敗不得清空排程時間造成每 30 秒重試。
 - 手動同步不應阻塞 UI；應改成背景 job 模式，讓不同 repo 可並行、同 repo 仍排隊。
-- 同步 branch 時，系統也需將該專案 repo 的 tags 一併推送到目標 remote；一般同步只新增不存在的 tags，勾選 `Force Push` 時才允許移動既有 tags。
+- 每次 sync / download-only 前均以 `git fetch origin --prune --tags --force --prune-tags` 對齊本機來源 tags。branch push 使用完整 `refs/heads/...` refspec 避免 branch/tag 同名歧義；一般同步只新增 tags，Force Push 時目標 tags 完整鏡像來源，包含 tag 移動與來源已刪除 tag 的目標刪除。
 - UI 的時間顯示格式統一為 `YYYY-MM-DD HH:mm:ss`，最後結果需顯示最後執行時間。
 - log 改為每日單檔持續追加，檔名格式為 `YYYY-MM-DD.log`，且只保留當日一份。
 - `查看差異` 需改為 commit-based review：先顯示 ahead commit 清單，再點選單一 commit 顯示異動檔案清單。
@@ -196,7 +196,7 @@
 - 已更新規格：手動同步將改成背景 job，`POST /api/rules/{ruleId}/sync` 只負責排入佇列並回傳 `jobId`。
 - 已實作手動同步背景 job：手動同步 API 立即回 `jobId`，不同 repo 可並行，同 rule 若已有 `queued / running` job 則拒絕重複提交。
 - `queued` 狀態也視為暫時占用中，避免同一筆 rule 的排程同步在手動 job 尚未開始時插隊。
-- 已調整同步流程：branch push 成功後會再 push tags；一般同步只新增不存在的 tags，Force Push 會先 force-fetch 來源 tags 並 force-push tags 到目標 remote。
+- 已調整同步流程：每次同步前都強制修剪本機來源 tags；branch push 使用完整 heads refspec。tag 改採來源/目標差異同步，一般同步只新增，Force Push 才更新已移動 tag 並刪除來源已不存在的目標 tag。
 - 已實作 `download-only` rule mode：UI 可選「只下載到本地」，後端只 clone/fetch/reset/pull 來源分支，不建立 target remote，也不執行 push；fetch 來源時使用 `--force --prune-tags` 讓本地 tags 與來源 remote tags 對齊。
 - 已實作手動版本一致性比對：sync rule 可比較來源與目標的 commit hash、tree hash 與雙方獨有 commit 數量，並判定 `IDENTICAL`、`CONTENT_IDENTICAL`、`DIFFERENT`、`TARGET_MISSING` 或 `CHECK_FAILED`。
 - UI 已新增 `版本比對` 操作與結果視窗；只有 `DIFFERENT` 狀態可直接進入既有差異檢視流程，完整執行結果會寫入當日 log。
