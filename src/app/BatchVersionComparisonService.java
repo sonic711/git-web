@@ -11,7 +11,7 @@ final class BatchVersionComparisonService {
     private final Map<String, BatchJob> jobs = new ConcurrentHashMap<>();
 
     BatchJob create(String sourceBranch, String targetRemoteId, String targetRemoteName, String targetBranch,
-                    List<String> ruleIds) {
+                    List<String> ruleIds, List<String> selectedProjectIds) {
         BatchJob job = new BatchJob();
         job.jobId = createJobId();
         job.status = "queued";
@@ -20,6 +20,7 @@ final class BatchVersionComparisonService {
         job.targetRemoteName = targetRemoteName;
         job.targetBranch = targetBranch;
         job.ruleIds = new ArrayList<>(ruleIds);
+        job.selectedProjectIds = new ArrayList<>(selectedProjectIds);
         job.total = ruleIds.size();
         job.queuedAt = Models.nowIso();
         jobs.put(job.jobId, job);
@@ -42,6 +43,7 @@ final class BatchVersionComparisonService {
         private String targetRemoteName;
         private String targetBranch;
         private List<String> ruleIds = new ArrayList<>();
+        private List<String> selectedProjectIds = new ArrayList<>();
         private int total;
         private int completed;
         private String queuedAt;
@@ -94,6 +96,8 @@ final class BatchVersionComparisonService {
             map.put("targetRemoteId", targetRemoteId);
             map.put("targetRemoteName", targetRemoteName);
             map.put("targetBranch", targetBranch);
+            map.put("selectedProjectIds", new ArrayList<>(selectedProjectIds));
+            map.put("selectedProjectCount", selectedProjectIds.size());
             map.put("total", total);
             map.put("completed", completed);
             map.put("queuedAt", queuedAt);

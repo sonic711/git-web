@@ -131,7 +131,7 @@ function renderSpecs() {
   if (current && batchState.specs.some(spec => spec.key === current)) {
     select.value = current;
   }
-  document.getElementById('startBatchButton').disabled = !batchState.specs.length;
+  renderProjectSelection();
 }
 
 function selectedSpec() {
@@ -139,10 +139,57 @@ function selectedSpec() {
   return batchState.specs.find(spec => spec.key === key);
 }
 
+function renderProjectSelection() {
+  const root = document.getElementById('batchProjectSelectionList');
+  const spec = selectedSpec();
+  const projects = Array.isArray(spec?.projects) ? spec.projects : [];
+  if (!projects.length) {
+    root.innerHTML = '<div class="empty">目前沒有可比對的專案</div>';
+    updateProjectSelectionSummary();
+    return;
+  }
+  root.innerHTML = projects.map(project => `
+    <label class="batch-project-option">
+      <input type="checkbox" value="${escapeAttr(project.projectId)}" checked>
+      <span>${escapeHtml(project.projectName || project.projectId)}</span>
+      <small>${Number(project.ruleCount || 0)} 個規則</small>
+    </label>
+  `).join('');
+  updateProjectSelectionSummary();
+}
+
+function selectedProjectIds() {
+  return Array.from(document.querySelectorAll('#batchProjectSelectionList input[type="checkbox"]:checked'))
+    .map(input => input.value);
+}
+
+function updateProjectSelectionSummary() {
+  const total = document.querySelectorAll('#batchProjectSelectionList input[type="checkbox"]').length;
+  const selected = selectedProjectIds().length;
+  document.getElementById('batchProjectSelectionSummary').textContent = total
+    ? `已選 ${selected} / ${total} 個專案`
+    : '尚未選擇同步規格';
+  document.getElementById('startBatchButton').disabled = !selectedSpec() || selected === 0;
+  document.getElementById('selectAllBatchProjectsButton').disabled = total === 0;
+  document.getElementById('clearBatchProjectsButton').disabled = total === 0 || selected === 0;
+}
+
+function setAllBatchProjects(checked) {
+  document.querySelectorAll('#batchProjectSelectionList input[type="checkbox"]').forEach(input => {
+    input.checked = checked;
+  });
+  updateProjectSelectionSummary();
+}
+
 async function startBatch(specOverride = null) {
   const spec = specOverride || selectedSpec();
   if (!spec?.sourceBranch || !spec?.targetRemoteId || !spec?.targetBranch) {
     showToast('請先選擇同步規格', 'error');
+    return;
+  }
+  const projectIds = Array.isArray(spec.projectIds) ? spec.projectIds : selectedProjectIds();
+  if (!projectIds.length) {
+    showToast('請至少選擇一個專案', 'error');
     return;
   }
   try {
@@ -153,6 +200,7 @@ async function startBatch(specOverride = null) {
           sourceBranch: spec.sourceBranch,
           targetRemoteId: spec.targetRemoteId,
           targetBranch: spec.targetBranch,
+          projectIds,
         }),
       })
     );
@@ -168,11 +216,15 @@ async function startBatch(specOverride = null) {
 function rerunBatch() {
   const job = batchState.job;
   if (!job || job.status !== 'completed') return;
-  startBatch({
+  const spec = {
     sourceBranch: job.sourceBranch,
     targetRemoteId: job.targetRemoteId,
     targetBranch: job.targetBranch,
-  });
+  };
+  if (Array.isArray(job.selectedProjectIds) && job.selectedProjectIds.length) {
+    spec.projectIds = job.selectedProjectIds;
+  }
+  startBatch(spec);
 }
 
 async function loadJob(jobId, announceError = true) {
@@ -241,8 +293,11 @@ function renderJob() {
       && spec.targetBranch === job.targetBranch);
   if (matchingSpec) {
     document.getElementById('batchSpecSelect').value = matchingSpec.key;
+    renderProjectSelection();
   }
+  const selectedProjectCount = Number(job.selectedProjectCount || (job.selectedProjectIds || []).length || 0);
   rerunButton.disabled = job.status !== 'completed';
+  document.getElementById('batchJobMeta').textContent += ` / 專案：${selectedProjectCount}`;
   renderResults();
 }
 
@@ -337,6 +392,10 @@ function openDiff(ruleId) {
 document.getElementById('refreshSpecsButton').addEventListener('click', loadSpecs);
 document.getElementById('startBatchButton').addEventListener('click', () => startBatch());
 document.getElementById('rerunBatchButton').addEventListener('click', rerunBatch);
+document.getElementById('batchSpecSelect').addEventListener('change', renderProjectSelection);
+document.getElementById('batchProjectSelectionList').addEventListener('change', updateProjectSelectionSummary);
+document.getElementById('selectAllBatchProjectsButton').addEventListener('click', () => setAllBatchProjects(true));
+document.getElementById('clearBatchProjectsButton').addEventListener('click', () => setAllBatchProjects(false));
 document.getElementById('batchStatusFilter').addEventListener('change', renderResults);
 document.getElementById('batchMismatchOnly').addEventListener('change', renderResults);
 

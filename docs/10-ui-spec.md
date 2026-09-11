@@ -161,6 +161,8 @@
 控制項：
 
 - 同步規格下拉選單
+- 可勾選的專案清單，預設全選
+- `全選`、`清除` 與已選專案數量
 - `開始比對`
 - `重新比對全部`
 - `只顯示不一致` checkbox
@@ -195,6 +197,9 @@ uat -> UAT / uat（12 個專案）
 5. `TARGET_MISSING`、`DIFFERENT`、`CHECK_FAILED` 歸類為不一致。
 6. hash 預設顯示短值，完整值可透過 title / tooltip 查看。
 7. 頁面重新整理後若 job 仍存在，可用 URL 中的 `jobId` 恢復；服務重啟後 job 不存在則提示重新執行。
+8. 切換同步規格時，專案清單需立即切換為該規格的可選 project，並預設全選。
+9. 未選取任何 project 時，`開始比對` 按鈕必須 disabled。
+10. 已建立 job 後，畫面需顯示本次選取的 project 數量；「重新比對全部」沿用原 job 的 project 選取範圍。
 
 ## Settings 區
 

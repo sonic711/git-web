@@ -14,6 +14,17 @@ sourceBranch + targetRemoteId + targetBranch
 
 不新增額外群組設定，也不寫入 `config/settings.json`。
 
+## 專案選取
+
+使用者選擇同步規格後，頁面需列出該規格下所有可比對的 enabled projects，並預設全選。
+
+- 使用者可逐筆勾選或取消勾選 project。
+- 提供「全選」與「清除」操作，並顯示已選專案數量。
+- 建立 job 時，只比對被勾選 project 底下、且符合所選同步規格的 enabled sync rules。
+- 至少須選取一個 project 才能開始比對。
+- 此選取只屬於本次 job，不得寫入 `config/settings.json`，也不應影響其他批次規格。
+- API 需在建立 job 時重新驗證 project 仍符合所選規格；已停用、已刪除或規格已變更的 project 不得被納入。
+
 ## 比對內容
 
 每筆專案需取得：
@@ -50,9 +61,9 @@ Tag 差異是輔助警示，不取代 commit / tree 判定。例如 commit 與 t
 
 ## 背景 job
 
-1. UI 提交一組同步規格。
+1. UI 選擇一組同步規格與一個以上 project。
 2. API 立即建立 job 並回傳 HTTP `202`。
-3. job 收集所有符合的 enabled sync rules。
+3. job 收集被選取 project 中所有符合的 enabled sync rules。
 4. 最多 4 筆不同 repo 同時比較。
 5. 每筆仍取得相同 repo lock。
 6. 個別失敗回傳 `CHECK_FAILED`，不停止其他項目。
@@ -65,6 +76,7 @@ Job 只保存在記憶體；服務重啟後可重新執行。
 頁面顯示：
 
 - 規格摘要
+- 本次選取的專案數量
 - job 狀態
 - `completed / total`
 - 開始、完成時間
@@ -93,7 +105,7 @@ Job 只保存在記憶體；服務重啟後可重新執行。
 
 ## 驗收條件
 
-1. 相同 source branch、target remote、target branch 的規則會分在同一規格。
+1. 相同 source branch、target remote、target branch 的規則會分在同一規格，且規格回應需帶回可選專案清單。
 2. download-only、disabled project、disabled rule 不出現在批次規格。
 3. 建立 job 後 HTTP request 不等待 Git 完成。
 4. 不同 repo 可並行，同 repo 不會同時執行 Git 操作。
@@ -103,3 +115,5 @@ Job 只保存在記憶體；服務重啟後可重新執行。
 8. commit 相同但 tags 不同時顯示 tag 警示。
 9. 個別失敗不影響其他專案完成。
 10. 可只顯示不一致結果。
+11. 選取特定 projects 後，job 的總筆數與結果只包含被選取 projects 的符合規則。
+12. 未選取任何 project 時，不得建立 job。

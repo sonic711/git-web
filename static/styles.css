@@ -881,6 +881,49 @@ th {
   white-space: nowrap;
 }
 
+.batch-project-selector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.batch-project-selector-head h2 {
+  margin: 0 0 6px;
+}
+
+.batch-project-selection-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  max-height: 280px;
+  margin-top: 16px;
+  overflow-y: auto;
+}
+
+.batch-project-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+  cursor: pointer;
+}
+
+.batch-project-option span,
+.batch-project-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-project-option small {
+  color: var(--muted);
+}
+
 .batch-progress-head {
   display: flex;
   align-items: flex-start;
@@ -947,6 +990,10 @@ th {
   }
 
   .batch-progress-head {
+    display: grid;
+  }
+
+  .batch-project-selector-head {
     display: grid;
   }
 }

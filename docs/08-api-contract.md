@@ -383,7 +383,15 @@ Tag 查詢失敗時不影響 commit / tree 狀態；`tagsIdentical` 為 `null`�
     "targetRemoteId": "target-uat",
     "targetRemoteName": "UAT",
     "targetBranch": "uat",
-    "ruleCount": 12
+    "ruleCount": 12,
+    "projectCount": 12,
+    "projects": [
+      {
+        "projectId": "fsap-adm",
+        "projectName": "fsap-adm",
+        "ruleCount": 1
+      }
+    ]
   }
 ]
 ```
@@ -396,11 +404,14 @@ Tag 查詢失敗時不影響 commit / tree 狀態；`tagsIdentical` 為 `null`�
 {
   "sourceBranch": "uat",
   "targetRemoteId": "target-uat",
-  "targetBranch": "uat"
+  "targetBranch": "uat",
+  "projectIds": ["fsap-adm", "fsap-web"]
 }
 ```
 
-回應 HTTP `202`，包含 `jobId`、`queued` 與總筆數。
+`projectIds` 為本次要比對的 project IDs，至少需一筆；後端只接受仍屬於指定同步規格的 enabled projects。為相容舊版呼叫，未提供 `projectIds` 時視為選取該規格全部 project。
+
+回應 HTTP `202`，包含 `jobId`、`queued`、總 rule 筆數與本次選取的 project IDs。
 
 ### `GET /api/version-comparison/jobs/{jobId}`
 

@@ -18,10 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -433,10 +435,13 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
             }
             if ("POST".equals(method) && "/api/version-comparison/jobs".equals(path)) {
                 Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+                List<String> projectIds = body.containsKey("projectIds")
+                    ? versionComparisonProjectIds(body.get("projectIds"))
+                    : null;
                 HttpUtil.sendJson(exchange, 202, enqueueBatchVersionComparison(
                     Models.stringValue(body.get("sourceBranch")),
                     Models.stringValue(body.get("targetRemoteId")),
-                    Models.stringValue(body.get("targetBranch"))));
+                    Models.stringValue(body.get("targetBranch")), projectIds));
                 return;
             }
 
@@ -498,19 +503,44 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                     spec.put("targetRemoteName", remote.name);
                     spec.put("targetBranch", rule.targetBranch);
                     spec.put("ruleCount", 0);
+                    spec.put("projectCount", 0);
+                    spec.put("projects", new ArrayList<>());
                     return spec;
                 });
                 item.put("ruleCount", Models.intValue(item.get("ruleCount")) + 1);
+                addVersionComparisonProject(item, project);
             }
         }
         return new ArrayList<>(grouped.values());
     }
 
+    private void addVersionComparisonProject(Map<String, Object> spec, ProjectConfig project) {
+        List<Object> projects = Json.asList(spec.get("projects"));
+        for (Object item : projects) {
+            Map<String, Object> existing = Json.asObject(item);
+            if (project.id.equals(existing.get("projectId"))) {
+                existing.put("ruleCount", Models.intValue(existing.get("ruleCount")) + 1);
+                return;
+            }
+        }
+        Map<String, Object> candidate = new LinkedHashMap<>();
+        candidate.put("projectId", project.id);
+        candidate.put("projectName", project.name);
+        candidate.put("ruleCount", 1);
+        projects.add(candidate);
+        spec.put("projectCount", Models.intValue(spec.get("projectCount")) + 1);
+    }
+
     private Map<String, Object> enqueueBatchVersionComparison(String sourceBranch, String targetRemoteId,
-                                                               String targetBranch) {
+                                                               String targetBranch, List<String> requestedProjectIds) {
         AppConfig config = configService.getConfig();
         RemoteConfig remote = Models.findRemote(config, targetRemoteId);
         List<String> ruleIds = new ArrayList<>();
+        Set<String> requestedProjects = requestedProjectIds == null ? null : new LinkedHashSet<>(requestedProjectIds);
+        Set<String> selectedProjects = new LinkedHashSet<>();
+        if (requestedProjects != null) {
+            Models.require(!requestedProjects.isEmpty(), "Select at least one project for batch comparison");
+        }
         for (ProjectConfig project : config.projects) {
             if (!project.enabled) {
                 continue;
@@ -519,16 +549,30 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 if (rule.enabled && rule.isSyncMode()
                     && Objects.equals(sourceBranch, rule.sourceBranch)
                     && Objects.equals(targetRemoteId, rule.targetRemoteId)
-                    && Objects.equals(targetBranch, rule.targetBranch)) {
+                    && Objects.equals(targetBranch, rule.targetBranch)
+                    && (requestedProjects == null || requestedProjects.contains(project.id))) {
                     ruleIds.add(rule.id);
+                    selectedProjects.add(project.id);
                 }
             }
         }
+        if (requestedProjects != null) {
+            Models.require(selectedProjects.containsAll(requestedProjects),
+                "One or more selected projects no longer match this comparison spec");
+        }
         Models.require(!ruleIds.isEmpty(), "No enabled sync rules match this comparison spec");
         BatchVersionComparisonService.BatchJob job = batchVersionComparisonService.create(
-            sourceBranch, targetRemoteId, remote.name, targetBranch, ruleIds);
+            sourceBranch, targetRemoteId, remote.name, targetBranch, ruleIds, new ArrayList<>(selectedProjects));
         syncExecutor.submit(() -> runBatchVersionComparison(job));
         return job.toMap();
+    }
+
+    private List<String> versionComparisonProjectIds(Object rawProjectIds) {
+        Set<String> projectIds = new LinkedHashSet<>();
+        for (Object rawProjectId : Json.asList(rawProjectIds)) {
+            projectIds.add(Models.stringValue(rawProjectId));
+        }
+        return new ArrayList<>(projectIds);
     }
 
     private void runBatchVersionComparison(BatchVersionComparisonService.BatchJob job) {
