@@ -3,6 +3,7 @@ const batchState = {
   job: null,
   pollTimer: null,
   loadingCount: 0,
+  selectionBySpec: {},
 };
 
 async function api(path, options = {}) {
@@ -18,12 +19,7 @@ async function api(path, options = {}) {
 }
 
 function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type}`;
-  setTimeout(() => {
-    toast.className = 'toast hidden';
-  }, 3500);
+  GitWebUI.notify(message, type);
 }
 
 function showLoading(message) {
@@ -62,20 +58,7 @@ function escapeAttr(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  const dateParts = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ];
-  const timeParts = [
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-    String(date.getSeconds()).padStart(2, '0'),
-  ];
-  return `${dateParts.join('-')} ${timeParts.join(':')}`;
+  return GitWebUI.formatDateTime(value);
 }
 
 function shortHash(value) {
@@ -110,7 +93,7 @@ function isMismatch(result) {
 
 async function loadSpecs() {
   try {
-    batchState.specs = await withLoading('載入同步規格中...', () => api('/api/version-comparison/specs'));
+    batchState.specs = await withLoading('載入同步規格中…', () => api('/api/version-comparison/specs'));
     renderSpecs();
   } catch (error) {
     showToast(error.message, 'error');
@@ -124,7 +107,7 @@ function renderSpecs() {
     ? batchState.specs.map(spec => `
         <option value="${escapeAttr(spec.key)}">
           ${escapeHtml(spec.sourceBranch)} -> ${escapeHtml(spec.targetRemoteName)} / ${escapeHtml(spec.targetBranch)}
-          (${Number(spec.ruleCount || 0)} 個專案)
+          (${Number(spec.projectCount ?? spec.projects?.length ?? spec.ruleCount ?? 0)} 個專案)
         </option>
       `).join('')
     : '<option value="">沒有可用的同步規格</option>';
@@ -144,13 +127,17 @@ function renderProjectSelection() {
   const spec = selectedSpec();
   const projects = Array.isArray(spec?.projects) ? spec.projects : [];
   if (!projects.length) {
-    root.innerHTML = '<div class="empty">目前沒有可比對的專案</div>';
+    root.innerHTML = `<div class="empty">${spec && !Array.isArray(spec.projects)
+      ? '服務版本尚未提供專案清單。請重啟 Java 服務後，按「重新載入規格」。'
+      : '目前沒有可比對的專案，請先在專案同步中啟用同步規則。'}</div>`;
     updateProjectSelectionSummary();
     return;
   }
+  const selected = batchState.selectionBySpec[spec.key] || projects.map(project => project.projectId);
+  batchState.selectionBySpec[spec.key] = selected;
   root.innerHTML = projects.map(project => `
     <label class="batch-project-option">
-      <input type="checkbox" value="${escapeAttr(project.projectId)}" checked>
+      <input type="checkbox" name="batchProjects" value="${escapeAttr(project.projectId)}" ${selected.includes(project.projectId) ? 'checked' : ''}>
       <span>${escapeHtml(project.projectName || project.projectId)}</span>
       <small>${Number(project.ruleCount || 0)} 個規則</small>
     </label>
@@ -166,6 +153,8 @@ function selectedProjectIds() {
 function updateProjectSelectionSummary() {
   const total = document.querySelectorAll('#batchProjectSelectionList input[type="checkbox"]').length;
   const selected = selectedProjectIds().length;
+  const spec = selectedSpec();
+  if (spec) batchState.selectionBySpec[spec.key] = selectedProjectIds();
   document.getElementById('batchProjectSelectionSummary').textContent = total
     ? `已選 ${selected} / ${total} 個專案`
     : '尚未選擇同步規格';
@@ -193,7 +182,7 @@ async function startBatch(specOverride = null) {
     return;
   }
   try {
-    const job = await withLoading('建立批次版本比對工作中...', () =>
+    const job = await withLoading('建立批次版本比對工作中…', () =>
       api('/api/version-comparison/jobs', {
         method: 'POST',
         body: JSON.stringify({
@@ -205,6 +194,7 @@ async function startBatch(specOverride = null) {
       })
     );
     batchState.job = job;
+    restoreJobSelection(job);
     history.replaceState(null, '', `?jobId=${encodeURIComponent(job.jobId)}`);
     renderJob();
     startPolling();
@@ -229,7 +219,9 @@ function rerunBatch() {
 
 async function loadJob(jobId, announceError = true) {
   try {
+    const restore = batchState.job?.jobId !== jobId;
     batchState.job = await api(`/api/version-comparison/jobs/${encodeURIComponent(jobId)}`);
+    if (restore) restoreJobSelection(batchState.job);
     renderJob();
     if (batchState.job.status === 'completed') {
       stopPolling();
@@ -282,23 +274,25 @@ function renderJob() {
   document.getElementById('batchJobTitle').textContent =
     `${job.sourceBranch} -> ${job.targetRemoteName} / ${job.targetBranch}`;
   document.getElementById('batchJobMeta').textContent =
-    `${job.status} / 開始：${formatDateTime(job.startedAt || job.queuedAt)} / 完成：${formatDateTime(job.finishedAt)}`;
+    `${({ queued: '排隊中', running: '比對中', completed: '比對完成' })[job.status] || job.status} / 開始：${formatDateTime(job.startedAt || job.queuedAt)} / 完成：${formatDateTime(job.finishedAt)}`;
   document.getElementById('batchProgressText').textContent = `${completed} / ${total}`;
-  document.getElementById('batchProgressBar').style.width = `${percent}%`;
+  document.getElementById('batchProgressBar').style.transform = `scaleX(${percent / 100})`;
+  document.getElementById('batchProgress').setAttribute('aria-valuenow', percent);
   document.getElementById('batchPageSubtitle').textContent =
     `${job.sourceBranch} -> ${job.targetRemoteName} / ${job.targetBranch}`;
-  const matchingSpec = batchState.specs.find(spec =>
-    spec.sourceBranch === job.sourceBranch
-      && spec.targetRemoteId === job.targetRemoteId
-      && spec.targetBranch === job.targetBranch);
-  if (matchingSpec) {
-    document.getElementById('batchSpecSelect').value = matchingSpec.key;
-    renderProjectSelection();
-  }
   const selectedProjectCount = Number(job.selectedProjectCount || (job.selectedProjectIds || []).length || 0);
   rerunButton.disabled = job.status !== 'completed';
   document.getElementById('batchJobMeta').textContent += ` / 專案：${selectedProjectCount}`;
   renderResults();
+}
+
+function restoreJobSelection(job) {
+  const spec = batchState.specs.find(item => item.sourceBranch === job.sourceBranch
+    && item.targetRemoteId === job.targetRemoteId && item.targetBranch === job.targetBranch);
+  if (!spec) return;
+  if (Array.isArray(job.selectedProjectIds)) batchState.selectionBySpec[spec.key] = [...job.selectedProjectIds];
+  document.getElementById('batchSpecSelect').value = spec.key;
+  renderProjectSelection();
 }
 
 function renderResults() {
@@ -365,12 +359,13 @@ function renderResults() {
       </tr>
     `;
   }).join('');
+  GitWebUI.decorate(root);
 }
 
 async function retryRule(ruleId) {
   if (!batchState.job?.jobId) return;
   try {
-    batchState.job = await withLoading('重新比對單一專案中...', () =>
+    batchState.job = await withLoading('重新比對單一專案中…', () =>
       api(`/api/version-comparison/jobs/${encodeURIComponent(batchState.job.jobId)}/rules/${encodeURIComponent(ruleId)}`,
         { method: 'POST', body: '{}' })
     );

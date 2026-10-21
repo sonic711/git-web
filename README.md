@@ -34,6 +34,13 @@
 - [docs/12-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/12-version-comparison.md)
 - [docs/13-rule-filtering.md](/Users/sonic711/Desktop/development/git-web/docs/13-rule-filtering.md)
 - [docs/14-batch-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/14-batch-version-comparison.md)
+- [docs/15-ui-ux-redesign.md](/Users/sonic711/Desktop/development/git-web/docs/15-ui-ux-redesign.md)
+
+## UI/UX 工作區
+
+首頁以專案同步為核心，提供專案、規則、自動排程與異常概況；側欄可切換 Remote 管理、執行紀錄及工作區設定。批次版本比對與 Commit 審查使用一致的介面、鍵盤焦點與響應式排版。字型與圖示皆由本地提供。
+
+改版前還原點：`pre-ui-redesign-20261021`，對應 commit `84fb51b`，已推送至 `origin` 與 `bt`。
 
 ## 已確認架構
 

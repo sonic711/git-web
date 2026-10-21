@@ -4,31 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Git Web Offline</title>
+  <meta name="theme-color" content="#f5f7f6">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="dashboard-page">
+  <a class="skip-link" href="#mainContent">跳至主要內容</a>
+  <div class="workspace-topbar"><span>工作空間 <span aria-hidden="true">/</span> <strong id="workspaceBreadcrumb">專案同步</strong></span><span class="connection-indicator" id="connectionIndicator">連線中…</span></div>
   <header class="hero">
     <div>
-      <h1>Git Web Offline</h1>
-      <p>先建立專案，再為專案配置多條同步規則。</p>
+      <span class="eyebrow" id="workspaceEyebrow">REPOSITORY WORKSPACE</span>
+      <h1 id="workspaceTitle">專案同步</h1>
+      <p id="workspaceDescription">從來源到目標，掌握每一條同步規則。</p>
     </div>
-    <button id="refreshButton">重新整理</button>
+    <div class="inline-actions"><span class="refresh-hint" id="lastRefreshedAt">每 10 秒更新</span><button class="secondary" id="refreshButton" data-icon="refresh">重新整理</button></div>
   </header>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
     <div class="loading-card">
       <div class="spinner" aria-hidden="true"></div>
-      <div id="loadingMessage">作業中...</div>
+      <div id="loadingMessage">作業中…</div>
     </div>
   </div>
 
-  <main class="layout">
-    <section class="panel">
+  <main class="layout" id="mainContent" tabindex="-1">
+    <section class="overview-grid" data-workspace-view="projects" aria-label="同步概況">
+      <div class="overview-item"><span>專案總數</span><strong id="overviewProjects">0</strong><small>集中管理來源專案</small></div>
+      <div class="overview-item"><span>同步規則</span><strong id="overviewRules">0</strong><small id="overviewDownloadRules">包含同步與本地下載</small></div>
+      <div class="overview-item"><span><i class="status-dot success" aria-hidden="true"></i> 自動排程</span><strong id="overviewScheduled">0</strong><small>已啟用的排程規則</small></div>
+      <a class="overview-item overview-attention" href="#projects" id="showFailedRules"><span><i class="status-dot failed" aria-hidden="true"></i> 需要處理</span><strong id="overviewFailed">0</strong><small>查看失敗或中斷的規則 <span aria-hidden="true">→</span></small></a>
+    </section>
+    <section class="panel" data-workspace-view="settings" hidden>
       <div class="panel-head">
         <div>
-          <h2>Settings</h2>
-          <p class="panel-copy">本地主目錄改為全局設定，所有專案都會共用這個主目錄。</p>
+          <h2>本地工作目錄</h2>
+          <p class="panel-copy">設定存放專案的主目錄。下載規則可另外指定位置。</p>
         </div>
       </div>
       <div class="form-grid">
@@ -47,24 +57,24 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel projects-panel" data-workspace-view="projects">
       <div class="panel-head">
         <div>
-          <h2>Projects</h2>
-          <p class="panel-copy">每個專案共用同一份 vendor repo 與全局本地主目錄，底下可以建立多條 branch 同步規則。</p>
+          <h2>所有專案 <span class="section-count" id="projectCount">0</span></h2>
+          <p class="panel-copy">管理分支同步、排程與版本比對。</p>
         </div>
         <div class="inline-actions">
-          <button type="button" class="secondary" id="batchVersionCompareButton">批次版本比對</button>
-          <button id="newProjectButton">新增專案</button>
+          <a class="button secondary" href="/batch-version.html" target="_blank" rel="noopener" data-icon="compare">批次版本比對</a>
+          <button id="newProjectButton" data-icon="plus">新增專案</button>
         </div>
       </div>
       <div class="rule-filter-bar" aria-label="規則篩選">
         <label class="rule-filter-keyword">
           <span>關鍵字</span>
-          <input id="ruleFilterKeyword" type="search" placeholder="專案、規則、Branch、Remote...">
+          <input id="ruleFilterKeyword" type="search" placeholder="搜尋專案、規則或分支…">
         </label>
         <label>
-          <span>Remote Tab</span>
+          <span>目標 Remote</span>
           <select id="ruleFilterRemote">
             <option value="all">全部 Remote</option>
           </select>
@@ -109,25 +119,25 @@
       <div id="projectList"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-workspace-view="remotes" hidden>
       <div class="panel-head">
         <div>
-          <h2>Remote Tabs</h2>
-          <p class="panel-copy">每個頁籤保存共用 `base URL`，規則只需填最後的專案名稱 `.git`。</p>
+          <h2>Remote 模板</h2>
+          <p class="panel-copy">依環境管理共用的 Base URL，規則只需填入專案名稱。</p>
         </div>
-        <button id="newRemoteButton">新增 Remote Tab</button>
+        <button id="newRemoteButton" data-icon="plus">新增 Remote</button>
       </div>
       <div id="remoteTabs" class="tabs"></div>
       <div id="remoteTable"></div>
     </section>
 
-    <section class="panel two-col">
+    <section class="panel two-col" data-workspace-view="activity" hidden>
       <div>
-        <h2>Diff / Review</h2>
+        <h2>差異審查</h2>
         <div id="diffView" class="viewer empty">差異會在新視窗開啟，並可在新視窗完成人工確認。</div>
       </div>
       <div>
-        <h2>Run Log</h2>
+        <h2>執行紀錄</h2>
         <pre id="logView" class="viewer">尚未載入 log</pre>
       </div>
     </section>
@@ -257,6 +267,7 @@
     </section>
   </div>
 
+  <script src="/ui.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -702,8 +702,17 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         }
         String contentType = file.getFileName().toString().endsWith(".js") ? "application/javascript"
             : file.getFileName().toString().endsWith(".css") ? "text/css"
+            : file.getFileName().toString().endsWith(".ttf") ? "font/ttf"
+            : file.getFileName().toString().endsWith(".txt") ? "text/plain"
             : "text/html";
-        HttpUtil.sendText(exchange, 200, contentType, Files.readString(file, StandardCharsets.UTF_8));
+        byte[] content = Files.readAllBytes(file);
+        exchange.getResponseHeaders().set("Content-Type", contentType
+            + (contentType.startsWith("text/") || contentType.equals("application/javascript") ? "; charset=utf-8" : ""));
+        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        exchange.sendResponseHeaders(200, content.length);
+        try (var output = exchange.getResponseBody()) {
+            output.write(content);
+        }
     }
 
     private List<Object> projectListView() {

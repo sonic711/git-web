@@ -4,30 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Diff Review</title>
+  <meta name="theme-color" content="#f5f7f6">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="diff-page">
+  <a class="skip-link" href="#mainContent">跳至主要內容</a>
+  <div class="workspace-topbar"><span>工作空間 <span aria-hidden="true">/</span> <strong>Commit Review</strong></span><a href="/#projects" class="text-link">返回專案</a></div>
   <header class="hero">
     <div>
-      <h1>Commit Review</h1>
-      <p id="diffPageSubtitle">載入差異中...</p>
+      <span class="eyebrow">CHANGE REVIEW</span>
+      <h1>Commit 審查</h1>
+      <p id="diffPageSubtitle">載入差異中…</p>
     </div>
     <div class="inline-actions">
-      <button type="button" class="secondary" id="reloadDiffButton">抓取最新差異</button>
-      <button type="button" id="confirmReviewButton">人工確認本次同步</button>
-      <button type="button" id="pushSelectedCommitsButton">推送已選 Commit</button>
+      <button type="button" class="secondary" id="reloadDiffButton" data-icon="refresh">抓取最新差異</button>
+      <button type="button" class="secondary" id="confirmReviewButton" disabled>人工確認本次同步</button>
+      <button type="button" id="pushSelectedCommitsButton" data-icon="push" disabled>推送已選 Commit</button>
     </div>
   </header>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
     <div class="loading-card">
       <div class="spinner" aria-hidden="true"></div>
-      <div id="loadingMessage">作業中...</div>
+      <div id="loadingMessage">作業中…</div>
     </div>
   </div>
 
-  <main class="layout">
+  <main class="layout" id="mainContent" tabindex="-1">
+    <ol class="workflow-steps" aria-label="審查流程"><li><span>01</span> 選擇 Commit</li><li><span>02</span> 檢視異動檔案</li><li><span>03</span> 確認後推送</li></ol>
     <section class="panel">
       <div id="diffMeta" class="diff-meta-grid"></div>
       <div class="inline-actions diff-toolbar">
@@ -35,13 +40,13 @@
           <input type="checkbox" id="diffForcePushCheckbox">
           Force Push
         </label>
-        <div id="selectedCommitSummary" class="panel-copy">尚未選擇 commit</div>
+        <div id="selectedCommitSummary" class="panel-copy" role="status">尚未選擇 commit</div>
       </div>
     </section>
 
     <section class="panel diff-shell">
       <aside class="diff-sidebar">
-        <div class="diff-sidebar-head">Ahead Commits</div>
+        <h2 class="diff-sidebar-head">待審查的 Commits</h2>
         <div id="diffCommitList" class="diff-file-list"></div>
       </aside>
       <section class="diff-content">
@@ -51,6 +56,7 @@
     </section>
   </main>
 
+  <script src="/ui.js"></script>
   <script src="/diff-view.js"></script>
 </body>
 </html>

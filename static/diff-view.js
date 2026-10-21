@@ -23,15 +23,10 @@ async function api(path, options = {}) {
 }
 
 function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type}`;
-  setTimeout(() => {
-    toast.className = 'toast hidden';
-  }, 3500);
+  GitWebUI.notify(message, type);
 }
 
-function showLoading(message = '作業中...') {
+function showLoading(message = '作業中…') {
   diffState.loadingCount += 1;
   document.getElementById('loadingMessage').textContent = message;
   document.getElementById('loadingOverlay').classList.remove('hidden');
@@ -41,7 +36,7 @@ function hideLoading() {
   diffState.loadingCount = Math.max(0, diffState.loadingCount - 1);
   if (diffState.loadingCount === 0) {
     document.getElementById('loadingOverlay').classList.add('hidden');
-    document.getElementById('loadingMessage').textContent = '作業中...';
+    document.getElementById('loadingMessage').textContent = '作業中…';
   }
 }
 
@@ -68,25 +63,12 @@ function escapeAttr(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  const second = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  return GitWebUI.formatDateTime(value);
 }
 
 async function loadCachedSummary() {
   try {
-    const diff = await withLoading('載入差異快取中...', () =>
+    const diff = await withLoading('載入差異快取中…', () =>
       api(`/api/rules/${diffState.ruleId}/diff-cache`)
     );
     applySummary(diff);
@@ -106,7 +88,7 @@ async function loadCachedSummary() {
 
 async function refreshDiffSummary() {
   try {
-    const diff = await withLoading('抓取最新差異並建立 commit 快取中...', () =>
+    const diff = await withLoading('抓取最新差異並建立 commit 快取中…', () =>
       api(`/api/rules/${diffState.ruleId}/diff-cache/refresh`, { method: 'POST' })
     );
     applySummary(diff);
@@ -142,6 +124,7 @@ function render() {
   renderCommitList();
   renderCommitFiles();
   renderActionButtons();
+  GitWebUI.decorate();
 }
 
 function renderMeta() {
@@ -154,18 +137,18 @@ function renderMeta() {
   document.getElementById('diffPageSubtitle').textContent =
     `${diff.projectName} / ${diff.ruleName} / ${diff.sourceBranch} -> ${diff.targetBranch}`;
   document.getElementById('diffMeta').innerHTML = `
-    <div class="diff-meta-item"><strong>Project</strong><span>${escapeHtml(diff.projectName || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Rule</strong><span>${escapeHtml(diff.ruleName || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Source</strong><span>${escapeHtml(diff.sourceBranch || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Target</strong><span>${escapeHtml(diff.targetBranch || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Remote</strong><span>${escapeHtml(diff.targetRemoteName || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Repo</strong><span>${escapeHtml(diff.targetRepoName || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Commits Ahead</strong><span>${escapeHtml(diff.summary?.aheadCommits ?? 0)}</span></div>
-    <div class="diff-meta-item"><strong>Changed Files</strong><span>${escapeHtml(diff.summary?.changedFiles ?? 0)}</span></div>
-    <div class="diff-meta-item"><strong>Cache Status</strong><span>${escapeHtml(diff.cacheStatus || '-')}</span></div>
-    <div class="diff-meta-item"><strong>Cached At</strong><span>${escapeHtml(formatDateTime(diff.cachedAt))}</span></div>
-    <div class="diff-meta-item diff-meta-wide"><strong>Target URL</strong><span>${escapeHtml(diff.targetRemoteUrl || '-')}</span></div>
-    <div class="diff-meta-item diff-meta-wide"><strong>Cache Message</strong><span>${escapeHtml(diff.lastRefreshMessage || '-')}</span></div>
+    <div class="diff-meta-item"><strong>專案</strong><span>${escapeHtml(diff.projectName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>同步規則</strong><span>${escapeHtml(diff.ruleName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>來源 → 目標</strong><code>${escapeHtml(diff.sourceBranch || '-')} → ${escapeHtml(diff.targetBranch || '-')}</code></div>
+    <div class="diff-meta-item"><strong>目標倉庫</strong><span>${escapeHtml(diff.targetRemoteName || '-')} / ${escapeHtml(diff.targetRepoName || '-')}</span></div>
+    <div class="diff-meta-item"><strong>待審查 Commits</strong><span>${escapeHtml(diff.summary?.aheadCommits ?? 0)}</span></div>
+    <div class="diff-meta-item"><strong>異動檔案</strong><span>${escapeHtml(diff.summary?.changedFiles ?? 0)}</span></div>
+    <details class="review-details"><summary>檢視目標與更新資訊</summary><div>
+      <p>更新時間：${escapeHtml(formatDateTime(diff.cachedAt))}</p>
+      <p>資料狀態：${escapeHtml(({ fresh: '已更新', stale: '待更新' })[diff.cacheStatus] || diff.cacheStatus || '-')}</p>
+      <p>目標 URL：<code>${escapeHtml(diff.targetRemoteUrl || '-')}</code></p>
+      <p>${escapeHtml(diff.lastRefreshMessage || '')}</p>
+    </div></details>
   `;
 }
 
@@ -222,7 +205,7 @@ function renderCommitFiles() {
   title.textContent = `${commit?.shortId || diffState.selectedCommitId} ${commit?.title || ''}`.trim();
   const cached = diffState.commitFileCache[diffState.selectedCommitId];
   if (!cached) {
-    root.innerHTML = '載入 commit 檔案清單中...';
+    root.innerHTML = '載入 commit 檔案清單中…';
     return;
   }
   const files = cached.files || [];
@@ -261,7 +244,7 @@ async function selectCommit(commitId) {
     return;
   }
   try {
-    const data = await withLoading('載入 commit 檔案清單中...', () =>
+    const data = await withLoading('載入 commit 檔案清單中…', () =>
       api(`/api/rules/${diffState.ruleId}/diff/commits/${encodeURIComponent(commitId)}/files`)
     );
     diffState.commitFileCache[commitId] = data;
@@ -307,7 +290,7 @@ async function pushSelectedCommits() {
   }
   try {
     const forcePush = document.getElementById('diffForcePushCheckbox').checked;
-    const result = await withLoading('同步已選 commit 中...', () =>
+    const result = await withLoading('同步已選 commit 中…', () =>
       api(`/api/rules/${diffState.ruleId}/sync`, {
         method: 'POST',
         body: JSON.stringify({

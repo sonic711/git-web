@@ -10,6 +10,11 @@
 
 ## 目前狀態
 
+- 2026-10-21：改版前工作區乾淨，`84fb51b` 已建立 `pre-ui-redesign-20261021` tag 並推送 `origin` 與 `bt`。
+- UI/UX 依 UI UX Pro Max 與 Vercel Web Design Guidelines 改為同步優先工作區；設計、導覽與驗證依據見 `docs/15-ui-ux-redesign.md`。
+- 新增共用 `static/ui.js`，字型本地化，modal 支援焦點限制與 Escape；批次 job 輪詢不再重設專案選取，重新比對本批保留原 job 範圍。
+- 新版 UI 已以隔離 Java 服務、模擬 API 通過 Playwright 操作與 375/768/1024/1440px 排版檢核；測試不會對真實 Repo 執行 Git。
+
 - 已開始實作 MVP。
 - 已完成正式規格文件整理。
 - 已確認需求 01：手動同步單筆 rule。

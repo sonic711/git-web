@@ -37,15 +37,10 @@ async function api(path, options = {}) {
 }
 
 function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast ${type}`;
-  setTimeout(() => {
-    toast.className = 'toast hidden';
-  }, 3500);
+  GitWebUI.notify(message, type);
 }
 
-function showLoading(message = '作業中...') {
+function showLoading(message = '作業中…') {
   state.loadingCount += 1;
   document.getElementById('loadingMessage').textContent = message;
   document.getElementById('loadingOverlay').classList.remove('hidden');
@@ -55,7 +50,7 @@ function hideLoading() {
   state.loadingCount = Math.max(0, state.loadingCount - 1);
   if (state.loadingCount === 0) {
     document.getElementById('loadingOverlay').classList.add('hidden');
-    document.getElementById('loadingMessage').textContent = '作業中...';
+    document.getElementById('loadingMessage').textContent = '作業中…';
   }
 }
 
@@ -103,15 +98,11 @@ function isDownloadOnlyRule(rule) {
 }
 
 function openModal(id) {
-  document.getElementById(id).classList.remove('hidden');
-  document.body.classList.add('modal-open');
+  GitWebUI.openModal(id);
 }
 
 function closeModal(id) {
-  document.getElementById(id).classList.add('hidden');
-  if ([...document.querySelectorAll('.modal')].every(modal => modal.classList.contains('hidden'))) {
-    document.body.classList.remove('modal-open');
-  }
+  GitWebUI.closeModal(id);
 }
 
 function render() {
@@ -121,6 +112,19 @@ function render() {
   renderRemoteTabs();
   renderRemotes();
   renderRemoteOptions();
+  renderOverview();
+  GitWebUI.decorate();
+}
+
+function renderOverview() {
+  const rules = state.projects.flatMap(project => project.rules || []);
+  document.getElementById('overviewProjects').textContent = state.projects.length;
+  document.getElementById('projectCount').textContent = state.projects.length;
+  document.getElementById('overviewRules').textContent = rules.length;
+  document.getElementById('overviewDownloadRules').textContent = `${rules.filter(isDownloadOnlyRule).length} 條本地下載規則`;
+  document.getElementById('overviewScheduled').textContent = state.projects.reduce((sum, project) =>
+    sum + (project.enabled ? (project.rules || []).filter(rule => rule.enabled && rule.schedule?.enabled && !rule.manualOnly).length : 0), 0);
+  document.getElementById('overviewFailed').textContent = rules.filter(rule => ['failed', 'interrupted'].includes(effectiveRuleStatus(rule))).length;
 }
 
 function renderSystemSettings() {
@@ -142,10 +146,12 @@ function renderProjects() {
   renderRuleFilterSummary(matchedRuleCount, totalRuleCount);
 
   if (!state.projects.length) {
-    root.innerHTML = '<div class="viewer empty">尚未建立專案</div>';
+    root.renderedMarkup = null;
+    root.innerHTML = '<div class="filter-empty"><strong>建立你的第一個專案</strong><span>新增來源 Repo，再設定同步或下載規則。</span><button type="button" onclick="newProject()">新增專案</button></div>';
     return;
   }
   if (!filteredProjects.length) {
+    root.renderedMarkup = null;
     root.innerHTML = `
       <div class="filter-empty">
         <strong>沒有符合條件的規則</strong>
@@ -155,7 +161,7 @@ function renderProjects() {
     return;
   }
 
-  root.innerHTML = filteredProjects.map(({ project, rules }) => {
+  const markup = filteredProjects.map(({ project, rules }) => {
     const totalProjectRules = (project.rules || []).length;
     const isCollapsed = !filtersActive && !!state.collapsedProjects[project.id];
     const ruleRows = rules.length
@@ -168,21 +174,29 @@ function renderProjects() {
     return `
       <section class="project-card">
         <div class="project-head">
-          <div>
+          <div class="project-heading">
+            <span class="project-mark">${GitWebUI.icon('folder')}</span>
+            <div>
             <div class="project-title-row">
-              <button class="secondary collapse-toggle" ${filtersActive ? 'disabled' : ''}
+              <button class="collapse-toggle" ${filtersActive ? 'disabled' : ''}
+                aria-label="${isCollapsed ? '展開' : '收合'} ${escapeAttr(project.name)} 的規則"
+                aria-expanded="${!isCollapsed}"
                 onclick="toggleProjectCollapse('${escapeAttr(project.id)}')">
-                ${filtersActive ? '篩選展開中' : isCollapsed ? '展開規則' : '收合規則'}
+                ${GitWebUI.icon('chevron')}
               </button>
               <h3>${escapeHtml(project.name)}</h3>
               <span class="tag">${ruleCountLabel}</span>
+              ${project.enabled ? '' : '<span class="tag warning">已停用</span>'}
             </div>
             <div class="project-meta">${escapeHtml(project.vendorRepoUrl)}</div>
+            </div>
           </div>
           <div class="inline-actions">
-            <button class="secondary" onclick="editProject('${escapeAttr(project.id)}')">編輯專案</button>
-            <button class="secondary" onclick="newRule('${escapeAttr(project.id)}')">新增規則</button>
-            <button class="secondary" onclick="deleteProject('${escapeAttr(project.id)}')">刪除專案</button>
+            <button class="secondary" onclick="newRule('${escapeAttr(project.id)}')">${GitWebUI.icon('plus')} 新增規則</button>
+            <details class="action-menu"><summary aria-label="${escapeAttr(project.name)} 的專案操作">${GitWebUI.icon('dots')}</summary><div>
+              <button onclick="editProject('${escapeAttr(project.id)}')">編輯專案</button>
+              <button class="danger" onclick="deleteProject('${escapeAttr(project.id)}')">刪除專案</button>
+            </div></details>
           </div>
         </div>
         <div class="${isCollapsed ? 'project-rules hidden' : 'project-rules'}">
@@ -203,6 +217,11 @@ function renderProjects() {
       </section>
     `;
   }).join('');
+  if (root.renderedMarkup !== markup || !root.children.length) {
+    root.innerHTML = markup;
+    root.renderedMarkup = markup;
+    GitWebUI.decorate(root);
+  }
 }
 
 function loadRuleFilters() {
@@ -322,14 +341,6 @@ function clearRuleFilters() {
   renderProjects();
 }
 
-function openBatchVersionComparison() {
-  const popup = window.open('/batch-version.html', 'batch-version-comparison',
-    'popup=yes,width=1540,height=980,resizable=yes,scrollbars=yes');
-  if (!popup) {
-    showToast('瀏覽器阻擋了批次版本比對視窗，請允許彈出視窗後重試', 'error');
-  }
-}
-
 function toggleProjectCollapse(projectId) {
   state.collapsedProjects[projectId] = !state.collapsedProjects[projectId];
   renderProjects();
@@ -341,20 +352,21 @@ function renderRuleRow(project, rule) {
   const displayTime = rule.currentJobStartedAt || rule.currentJobQueuedAt || rule.lastRunAt;
   const displaySource = rule.currentJobTriggerSource || rule.lastRunSource;
   const displayMessage = rule.currentJobMessage || rule.lastMessage || '';
-  const statusClass = displayStatus === 'failed' ? 'failed'
+  const statusClass = ['failed', 'interrupted'].includes(displayStatus) ? 'failed'
     : displayStatus === 'success' ? 'success'
     : displayStatus === 'running' ? 'running'
     : displayStatus === 'queued' ? 'queued' : '';
+  const statusLabel = { never: '尚未執行', queued: '排隊中', running: '執行中', success: '成功', failed: '失敗', interrupted: '已中斷' }[displayStatus] || displayStatus;
   const displayMessageText = displayStatus === 'failed' && displayMessage ? 'Sync Error' : displayMessage;
   const displayMessageHtml = displayStatus === 'failed' && displayMessage
-    ? `<div class="status-copy status-tooltip" tabindex="0">
+    ? `<div class="status-copy status-tooltip" tabindex="0" aria-label="${escapeAttr(displayMessage)}">
         ${escapeHtml(displayMessageText)}
         <span class="status-tooltip-panel">${escapeHtml(displayMessage)}</span>
       </div>`
     : `<div class="status-copy">${escapeHtml(displayMessageText)}</div>`;
   const reviewReady = isReviewReady(rule.id);
   const selectedCommitCount = selectedCommitIdsFor(rule.id).length;
-  const syncDisabled = !!rule.currentJobStatus || (!downloadOnly && rule.reviewRequired && !reviewReady);
+  const syncDisabled = !!rule.currentJobStatus || !!rule.running || !project.enabled || !rule.enabled || (!downloadOnly && rule.reviewRequired && !reviewReady);
   const versionCompareDisabled = downloadOnly || !!rule.currentJobStatus;
   const syncLabel = rule.currentJobStatus === 'queued' ? '排隊中'
     : rule.currentJobStatus === 'running' ? '同步中'
@@ -367,31 +379,32 @@ function renderRuleRow(project, rule) {
     : `<strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong><span>${escapeHtml(rule.targetRepoName)}</span>`;
   return `
     <tr>
-      <td>
+      <td data-label="規則">
         <div class="stacked-copy">
           <strong>${escapeHtml(rule.name)}</strong>
-          <span>${downloadOnly ? '<span class="tag">Download Only</span>' : ''}${rule.manualOnly ? '<span class="tag">Manual Only</span>' : ''}${rule.schedule?.enabled ? '<span class="tag">Auto Sync</span>' : ''}</span>
+          <span>${downloadOnly ? '<span class="tag">本地下載</span>' : ''}${rule.manualOnly ? '<span class="tag">僅手動</span>' : ''}${rule.schedule?.enabled ? '<span class="tag success">自動排程</span>' : ''}${rule.enabled ? '' : '<span class="tag warning">已停用</span>'}</span>
         </div>
       </td>
-      <td>
+      <td data-label="來源 / 目標">
         <div class="stacked-copy">
           <span>${branchText}</span>
           <span>${!downloadOnly && rule.reviewRequired ? `<span class="tag ${reviewReady ? 'success' : ''}">Review ${reviewReady ? 'Ready' : 'Required'}</span>` : ''}</span>
           <span>${!downloadOnly && selectedCommitCount ? `<span class="tag success">${selectedCommitCount} commits</span>` : ''}</span>
         </div>
       </td>
-      <td>
+      <td data-label="Remote">
         <div class="stacked-copy">${targetText}</div>
       </td>
-      <td>
-        <span class="tag ${statusClass}">${escapeHtml(displayStatus)}</span>
+      <td data-label="最後結果">
+        <span class="tag ${statusClass}">${escapeHtml(statusLabel)}</span>
         <div class="status-copy">${escapeHtml(formatDateTime(displayTime))}</div>
-        <div class="status-copy">${escapeHtml(displaySource || '-')}</div>
+        <div class="status-copy">${escapeHtml(({ manual: '手動執行', schedule: '自動排程' })[displaySource] || displaySource || '-')}</div>
         ${displayMessageHtml}
       </td>
-      <td>${escapeHtml(formatDateTime(rule.nextRunAt))}</td>
-      <td>
+      <td data-label="下次排程">${escapeHtml(formatDateTime(rule.nextRunAt))}</td>
+      <td data-label="操作">
         <div class="row-controls">
+          <div class="rule-toggles">
           <label class="mini-check">
             <input type="checkbox"
               ${rule.allowForcePush && !downloadOnly ? '' : 'disabled'}
@@ -406,13 +419,21 @@ function renderRuleRow(project, rule) {
               onchange="toggleAutoSync('${escapeAttr(rule.id)}', this.checked)">
             自動同步
           </label>
+          </div>
           <div class="inline-actions">
-            <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯</button>
-            <button class="secondary" ${downloadOnly ? 'disabled' : ''} onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>
-            <button class="secondary" ${versionCompareDisabled ? 'disabled' : ''} onclick="compareVersion('${escapeAttr(rule.id)}')">版本比對</button>
-            <button ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">${syncLabel}</button>
+            <button class="sync-action" ${syncDisabled ? 'disabled' : ''} onclick="runSync('${escapeAttr(rule.id)}')">${GitWebUI.icon('push')}${syncLabel}</button>
+            ${rule.reviewRequired && !downloadOnly
+              ? `<button class="secondary" ${rule.currentJobStatus ? 'disabled' : ''} onclick="showDiff('${escapeAttr(rule.id)}')">檢視 Commit</button>`
+              : `<button class="secondary" ${versionCompareDisabled ? 'disabled' : ''} onclick="compareVersion('${escapeAttr(rule.id)}')">版本比對</button>`}
+            <details class="action-menu"><summary>更多</summary><div>
+            ${rule.reviewRequired && !downloadOnly
+              ? `<button class="secondary" ${versionCompareDisabled ? 'disabled' : ''} onclick="compareVersion('${escapeAttr(rule.id)}')">版本比對</button>`
+              : `<button class="secondary" ${downloadOnly ? 'disabled' : ''} onclick="showDiff('${escapeAttr(rule.id)}')">查看差異</button>`}
             <button class="secondary" onclick="validateRule('${escapeAttr(rule.id)}')">驗證</button>
-            <button class="secondary" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除</button>
+            <button class="secondary" onclick="editRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">編輯規則</button>
+            ${rule.lastLogPath ? `<button onclick="loadLog('${escapeAttr(rule.lastLogPath)}', true)">查看執行紀錄</button>` : ''}
+            <button class="danger" onclick="deleteRule('${escapeAttr(project.id)}', '${escapeAttr(rule.id)}')">刪除規則</button>
+            </div></details>
           </div>
         </div>
       </td>
@@ -427,7 +448,7 @@ function renderRemoteTabs() {
     state.selectedRemoteTab = 'all';
   }
   root.innerHTML = tabs.map(tab => `
-    <button class="${tab.id === state.selectedRemoteTab ? 'tab active' : 'tab'}"
+    <button class="${tab.id === state.selectedRemoteTab ? 'tab active' : 'tab'}" aria-pressed="${tab.id === state.selectedRemoteTab}"
       onclick="selectRemoteTab('${escapeAttr(tab.id)}')">${escapeHtml(tab.name)}</button>
   `).join('');
 }
@@ -519,20 +540,7 @@ function updateRemoteExamplePreview() {
 }
 
 function formatDateTime(value) {
-  if (!value) {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  const second = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  return GitWebUI.formatDateTime(value);
 }
 
 function deriveProjectNameFromUrl(repoUrl) {
@@ -705,13 +713,22 @@ async function loadAll(options = {}) {
       state.selectedRemoteTab = 'all';
     }
     render();
+    document.getElementById('connectionIndicator').textContent = '服務已連線';
+    document.getElementById('connectionIndicator').classList.remove('disconnected');
+    document.getElementById('lastRefreshedAt').textContent = `更新於 ${formatDateTime(new Date()).slice(11)}`;
   };
-  return silent ? run() : withLoading('重新載入資料中...', run);
+  try {
+    return await (silent ? run() : withLoading('重新載入資料中…', run));
+  } catch (error) {
+    document.getElementById('connectionIndicator').textContent = '服務連線失敗';
+    document.getElementById('connectionIndicator').classList.add('disconnected');
+    throw error;
+  }
 }
 
 async function pickGlobalWorkspaceRoot() {
   try {
-    const result = await withLoading('開啟資料夾選擇器...', () =>
+    const result = await withLoading('開啟資料夾選擇器…', () =>
       api('/api/system/select-directory', { method: 'POST', body: '{}' })
     );
     document.getElementById('globalWorkspaceRoot').value = result.path || '';
@@ -727,7 +744,7 @@ async function saveSystemSettings() {
     const payload = {
       localWorkspaceRoot: document.getElementById('globalWorkspaceRoot').value.trim(),
     };
-    await withLoading('儲存全局設定中...', () =>
+    await withLoading('儲存全局設定中…', () =>
       api('/api/system/config', { method: 'PUT', body: JSON.stringify(payload) })
     );
     state.systemSettingsDirty = false;
@@ -741,7 +758,7 @@ async function saveSystemSettings() {
 
 async function exportConfig() {
   try {
-    const config = await withLoading('匯出設定檔中...', () =>
+    const config = await withLoading('匯出設定檔中…', () =>
       api('/api/system/config/export')
     );
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
@@ -777,7 +794,7 @@ async function importConfigFile(event) {
   try {
     const text = await file.text();
     JSON.parse(text);
-    const result = await withLoading('匯入設定檔中...', () =>
+    const result = await withLoading('匯入設定檔中…', () =>
       api('/api/system/config/import', { method: 'POST', body: text })
     );
     await loadAll({ silent: true });
@@ -804,7 +821,7 @@ async function saveProject(event) {
       enabled: document.getElementById('projectEnabled').checked,
       rules: existing?.rules?.map(stripRuntimeFieldsFromRule) || [],
     };
-    await withLoading('儲存專案中...', () =>
+    await withLoading('儲存專案中…', () =>
       api(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
     );
     await loadAll({ silent: true });
@@ -842,7 +859,7 @@ async function saveRule(event) {
         intervalMinutes: Number(document.getElementById('intervalMinutes').value || 30),
       },
     };
-    await withLoading('儲存同步規則中...', () =>
+    await withLoading('儲存同步規則中…', () =>
       api(`/api/projects/${projectId}/rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(payload) })
     );
     await loadAll({ silent: true });
@@ -864,12 +881,12 @@ async function saveRemote(event) {
       enabled: document.getElementById('remoteEnabled').checked,
     };
     if (originalId) {
-      await withLoading('儲存 Remote Tab 中...', () =>
+      await withLoading('儲存 Remote Tab 中…', () =>
         api(`/api/remotes/${originalId}`, { method: 'PUT', body: JSON.stringify(payload) })
       );
       state.selectedRemoteTab = payload.id;
     } else {
-      await withLoading('建立 Remote Tab 中...', () =>
+      await withLoading('建立 Remote Tab 中…', () =>
         api('/api/remotes', { method: 'POST', body: JSON.stringify(payload) })
       );
       state.selectedRemoteTab = payload.id;
@@ -884,7 +901,7 @@ async function saveRemote(event) {
 
 async function pickDownloadWorkspaceRoot() {
   try {
-    const result = await withLoading('開啟資料夾選擇器...', () =>
+    const result = await withLoading('開啟資料夾選擇器…', () =>
       api('/api/system/select-directory', { method: 'POST', body: '{}' })
     );
     document.getElementById('downloadWorkspaceRoot').value = result.path || '';
@@ -900,7 +917,7 @@ async function toggleAutoSync(ruleId, enabled) {
     if (selection.rule.manualOnly && enabled) {
       throw new Error('Manual Only 規則不可啟用自動同步');
     }
-    await withLoading(`正在${enabled ? '啟用' : '停用'}自動同步...`, () =>
+    await withLoading(`正在${enabled ? '啟用' : '停用'}自動同步…`, () =>
       api(`/api/rules/${ruleId}/schedule`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -923,7 +940,7 @@ function setRowForcePush(ruleId, checked) {
 
 async function validateRule(ruleId) {
   try {
-    const data = await withLoading('驗證同步規則中...', () =>
+    const data = await withLoading('驗證同步規則中…', () =>
       api(`/api/rules/${ruleId}/validate`, { method: 'POST' })
     );
     document.getElementById('logView').textContent = JSON.stringify(data, null, 2);
@@ -1013,7 +1030,7 @@ async function compareVersion(ruleId) {
     if (isDownloadOnlyRule(selection.rule)) {
       throw new Error('只下載規則沒有目標 remote，無法進行版本比對');
     }
-    const data = await withLoading('比對來源與目標版本中...', () =>
+    const data = await withLoading('比對來源與目標版本中…', () =>
       api(`/api/rules/${ruleId}/version-compare`, { method: 'POST' })
     );
     state.versionComparison = data;
@@ -1074,7 +1091,7 @@ async function runSync(ruleId) {
     if (!downloadOnly && selection.rule.reviewRequired && !selectedCommitIds.length) {
       throw new Error('請先在查看差異畫面中選擇至少一筆 commit');
     }
-    const result = await withLoading(downloadOnly ? '提交下載工作中...' : '提交同步工作中...', () =>
+    const result = await withLoading(downloadOnly ? '提交下載工作中…' : '提交同步工作中…', () =>
       api(`/api/rules/${ruleId}/sync`, {
         method: 'POST',
         body: JSON.stringify({ forcePush, reviewConfirmed, selectedCommitIds }),
@@ -1129,7 +1146,7 @@ async function deleteProject(projectId) {
     if (!confirm(`確定要刪除專案 ${project?.name || projectId} 嗎？`)) {
       return;
     }
-    await withLoading('刪除專案中...', () =>
+    await withLoading('刪除專案中…', () =>
       api(`/api/projects/${projectId}`, { method: 'DELETE' })
     );
     await loadAll({ silent: true });
@@ -1145,7 +1162,7 @@ async function deleteRule(projectId, ruleId) {
     if (!confirm(`確定要刪除同步規則 ${selection?.rule?.name || ruleId} 嗎？`)) {
       return;
     }
-    await withLoading('刪除同步規則中...', () =>
+    await withLoading('刪除同步規則中…', () =>
       api(`/api/projects/${projectId}/rules/${ruleId}`, { method: 'DELETE' })
     );
     delete state.reviewSelections[ruleId];
@@ -1160,7 +1177,7 @@ async function deleteRule(projectId, ruleId) {
 async function deleteRemote(id) {
   try {
     if (!confirm(`確定要刪除 Remote Tab ${id} 嗎？`)) return;
-    await withLoading('刪除 Remote Tab 中...', () => api(`/api/remotes/${id}`, { method: 'DELETE' }));
+    await withLoading('刪除 Remote Tab 中…', () => api(`/api/remotes/${id}`, { method: 'DELETE' }));
     if (state.selectedRemoteTab === id) state.selectedRemoteTab = 'all';
     await loadAll({ silent: true });
     showToast('Remote Tab 已刪除', 'success');
@@ -1184,10 +1201,11 @@ function startAutoRefresh() {
   }, 10000);
 }
 
-async function loadLog(logId) {
+async function loadLog(logId, navigate = false) {
   try {
-    const log = await withLoading('載入執行紀錄中...', () => api(`/api/logs/${encodeURIComponent(logId)}`));
+    const log = await withLoading('載入執行紀錄中…', () => api(`/api/logs/${encodeURIComponent(logId)}`));
     document.getElementById('logView').textContent = log.content || '(empty log)';
+    if (navigate) window.location.hash = 'activity';
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -1242,9 +1260,16 @@ document.getElementById('exportConfigButton').addEventListener('click', exportCo
 document.getElementById('importConfigButton').addEventListener('click', promptImportConfig);
 document.getElementById('importConfigFile').addEventListener('change', importConfigFile);
 document.getElementById('newProjectButton').addEventListener('click', newProject);
-document.getElementById('batchVersionCompareButton').addEventListener('click', openBatchVersionComparison);
+document.getElementById('showFailedRules').addEventListener('click', () => {
+  state.ruleFilters = { ...DEFAULT_RULE_FILTERS, abnormalOnly: true };
+  saveRuleFilters();
+  renderRuleFilters();
+  renderProjects();
+});
 document.getElementById('newRemoteButton').addEventListener('click', newRemote);
-document.getElementById('refreshButton').addEventListener('click', () => loadAll());
+document.getElementById('refreshButton').addEventListener('click', () => {
+  loadAll().then(() => showToast('工作區已更新')).catch(error => showToast(error.message, 'error'));
+});
 document.getElementById('ruleFilterKeyword').addEventListener('input', event => {
   updateRuleFilter('keyword', event.target.value);
 });
@@ -1319,6 +1344,10 @@ window.addEventListener('message', event => {
   }
 });
 
+window.addEventListener('beforeunload', event => {
+  if (state.systemSettingsDirty) event.preventDefault();
+});
+
 loadAll({ silent: true }).catch(error => {
   document.getElementById('logView').textContent = error.message;
   showToast(error.message, 'error');
@@ -1328,6 +1357,8 @@ updateRemoteExamplePreview();
 updateLocalRepoPathPreview();
 
 window.editProject = editProject;
+window.newProject = newProject;
+window.loadLog = loadLog;
 window.newRule = newRule;
 window.editRule = editRule;
 window.toggleProjectCollapse = toggleProjectCollapse;
