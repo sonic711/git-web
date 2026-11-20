@@ -28,6 +28,8 @@
       "id": "target-sit",
       "name": "SIT",
       "baseUrl": "ssh://git@example.com:222/team/",
+      "sshBaseUrl": "ssh://git@example.com:222/team/",
+      "httpsBaseUrl": "https://example.com/team/",
       "enabled": true
     }
   ],
@@ -46,6 +48,7 @@
           "sourceBranch": "sit",
           "targetRemoteId": "target-sit",
           "targetRepoName": "fsap-adm.git",
+          "targetProtocol": "default",
           "targetBranch": "sit",
           "sameBranchNameExpected": true,
           "enabled": true,
@@ -103,7 +106,11 @@
 - `name`: `string`
   UI 顯示名稱，同時作為 remote tab 名稱
 - `baseUrl`: `string`
-  Git SSH base URL，例如 `ssh://git@example.com:222/team/`
+  Remote 預設 Base URL，可為 SSH 或 HTTPS。舊設定只有此欄位時仍有效。
+- `sshBaseUrl`: `string | null`
+  SSH 連線的 Base URL，例如 `ssh://git@example.com:222/team/` 或 `git@example.com:team/`。缺漏時可由 SSH 格式的 `baseUrl` 沿用。
+- `httpsBaseUrl`: `string | null`
+  HTTPS 連線的 Base URL，例如 `https://example.com/team/`。缺漏時可由 HTTPS 格式的 `baseUrl` 沿用。
 - `enabled`: `boolean`
   是否啟用此 remote
 
@@ -136,6 +143,8 @@
   對應 `remotes[*].id`。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `targetRepoName`: `string`
   目標 repo 名稱，例如 `fsap-adm.git`。`mode=sync` 時必填，`mode=download-only` 時忽略
+- `targetProtocol`: `default | ssh | https`
+  規則使用的目標連線方式。缺漏時為 `default`，沿用 Remote 的 `baseUrl`；選擇 `ssh` 或 `https` 時使用 Remote 對應的 URL。對應 URL 未設定時拒絕儲存；不會自動替換 URL 協定、主機、使用者或連接埠。`download-only` 忽略此欄位。
 - `targetBranch`: `string`
   目標分支。`mode=sync` 時必填，`mode=download-only` 時忽略
 - `downloadWorkspaceRoot`: `string`
@@ -174,7 +183,7 @@
 
 1. `id` 不可重複
 2. `baseUrl` 不可為空
-3. `baseUrl` 必須為有效 SSH Git URL，且應能和 `targetRepoName` 組成完整 remote URL
+3. `baseUrl` 必須為 SSH 或 HTTPS Git URL，且依規則選擇的端點應能和 `targetRepoName` 組成完整 remote URL
 
 ### Project 驗證
 

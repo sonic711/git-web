@@ -65,6 +65,8 @@ final class Models {
         String id;
         String name;
         String baseUrl;
+        String sshBaseUrl;
+        String httpsBaseUrl;
         boolean enabled;
         String legacyUrl;
 
@@ -76,6 +78,11 @@ final class Models {
             config.name = firstNonBlank(configuredName, legacyGroup, config.id);
             config.legacyUrl = nullableString(map.get("url"));
             config.baseUrl = firstNonBlank(nullableString(map.get("baseUrl")), deriveBaseUrl(config.legacyUrl));
+            config.sshBaseUrl = firstNonBlank(nullableString(map.get("sshBaseUrl")),
+                isSshUrl(config.baseUrl) ? config.baseUrl : null);
+            config.httpsBaseUrl = firstNonBlank(nullableString(map.get("httpsBaseUrl")),
+                config.baseUrl != null && config.baseUrl.startsWith("https://") ? config.baseUrl : null);
+            config.baseUrl = firstNonBlank(config.baseUrl, config.sshBaseUrl, config.httpsBaseUrl);
             config.enabled = booleanValue(map.getOrDefault("enabled", Boolean.TRUE));
             return config;
         }
@@ -85,8 +92,18 @@ final class Models {
             map.put("id", id);
             map.put("name", name);
             map.put("baseUrl", baseUrl);
+            map.put("sshBaseUrl", sshBaseUrl);
+            map.put("httpsBaseUrl", httpsBaseUrl);
             map.put("enabled", enabled);
             return map;
+        }
+
+        String baseUrlFor(String protocol) {
+            if (protocol == null || protocol.equals("default")) return baseUrl;
+            if (protocol.equals("ssh")) return firstNonBlank(sshBaseUrl, isSshUrl(baseUrl) ? baseUrl : null);
+            if (protocol.equals("https")) return firstNonBlank(httpsBaseUrl,
+                baseUrl != null && baseUrl.startsWith("https://") ? baseUrl : null);
+            throw new IllegalArgumentException("targetProtocol must be default, ssh, or https");
         }
     }
 
@@ -206,6 +223,7 @@ final class Models {
         String sourceBranch;
         String targetRemoteId;
         String targetRepoName;
+        String targetProtocol = "default";
         String targetBranch;
         String downloadWorkspaceRoot;
         boolean sameBranchNameExpected;
@@ -223,6 +241,7 @@ final class Models {
             config.sourceBranch = stringValue(map.get("sourceBranch"));
             config.targetRemoteId = nullableString(map.get("targetRemoteId"));
             config.targetRepoName = nullableString(map.get("targetRepoName"));
+            config.targetProtocol = firstNonBlank(nullableString(map.get("targetProtocol")), "default");
             config.targetBranch = nullableString(map.get("targetBranch"));
             config.downloadWorkspaceRoot = nullableString(map.get("downloadWorkspaceRoot"));
             config.sameBranchNameExpected = booleanValue(map.getOrDefault("sameBranchNameExpected", Boolean.FALSE));
@@ -263,6 +282,7 @@ final class Models {
             map.put("sourceBranch", sourceBranch);
             map.put("targetRemoteId", targetRemoteId);
             map.put("targetRepoName", targetRepoName);
+            map.put("targetProtocol", targetProtocol);
             map.put("targetBranch", targetBranch);
             map.put("downloadWorkspaceRoot", downloadWorkspaceRoot);
             map.put("sameBranchNameExpected", sameBranchNameExpected);
@@ -527,6 +547,10 @@ final class Models {
         int colonIndex = gitUrl.startsWith("ssh://") ? -1 : gitUrl.lastIndexOf(':');
         int splitIndex = Math.max(slashIndex, colonIndex);
         return splitIndex >= 0 && splitIndex + 1 < gitUrl.length() ? gitUrl.substring(splitIndex + 1) : gitUrl;
+    }
+
+    static boolean isSshUrl(String url) {
+        return url != null && (url.startsWith("ssh://") || url.startsWith("git@"));
     }
 
     static String buildGitUrl(String baseUrl, String repoName) {

@@ -376,7 +376,7 @@ function renderRuleRow(project, rule) {
     : `<code>${escapeHtml(rule.sourceBranch)}</code> -> <code>${escapeHtml(rule.targetBranch)}</code>`;
   const targetText = downloadOnly
     ? `<strong>只下載到本地</strong><span>${escapeHtml(rule.localRepoPath || project.localRepoPath || '')}</span>`
-    : `<strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)}</strong><span>${escapeHtml(rule.targetRepoName)}</span>`;
+    : `<strong>${escapeHtml(rule.targetRemoteName || rule.targetRemoteId)} <span class="tag">${remoteUrlFor(remoteById(rule.targetRemoteId), rule.targetProtocol || 'default').startsWith('https://') ? 'HTTPS' : 'SSH'}</span></strong><span>${escapeHtml(rule.targetRepoName)}</span>`;
   return `
     <tr>
       <td data-label="規則">
@@ -467,7 +467,11 @@ function renderRemotes() {
     return `
       <tr>
         <td><strong>${escapeHtml(remote.name)}</strong><br>${escapeHtml(remote.id)}</td>
-        <td>${escapeHtml(remote.baseUrl)}</td>
+        <td><div class="stacked-copy">
+          ${remoteUrlFor(remote, 'ssh') ? `<span><strong>SSH</strong> <code>${escapeHtml(remoteUrlFor(remote, 'ssh'))}</code></span>` : ''}
+          ${remoteUrlFor(remote, 'https') ? `<span><strong>HTTPS</strong> <code>${escapeHtml(remoteUrlFor(remote, 'https'))}</code></span>` : ''}
+          <span>預設：${String(remote.baseUrl || '').startsWith('https://') ? 'HTTPS' : 'SSH'}</span>
+        </div></td>
         <td>${remote.enabled ? 'enabled' : 'disabled'}</td>
         <td>${ruleCount}</td>
         <td>
@@ -524,12 +528,33 @@ function updateTargetUrlPreview() {
     preview.textContent = '請先建立或選擇 Remote Tab';
     return;
   }
-  const separator = remote.baseUrl.endsWith('/') || remote.baseUrl.endsWith(':') ? '' : '/';
-  preview.textContent = repoName ? `${remote.baseUrl}${separator}${repoName}` : `${remote.baseUrl}${separator}project.git`;
+  const protocolSelect = document.getElementById('targetProtocol');
+  for (const option of protocolSelect.options) {
+    option.disabled = option.value !== 'default' && !remoteUrlFor(remote, option.value);
+  }
+  const baseUrl = remoteUrlFor(remote, protocolSelect.value);
+  if (!baseUrl) {
+    preview.textContent = '此 Remote 尚未設定所選連線方式的 URL，請先到 Remote 管理設定。';
+    return;
+  }
+  const separator = baseUrl.endsWith('/') || baseUrl.endsWith(':') ? '' : '/';
+  preview.textContent = `${baseUrl}${separator}${repoName || 'project.git'}`;
+}
+
+function remoteUrlFor(remote, protocol = 'default') {
+  if (!remote) return '';
+  if (protocol === 'ssh') return remote.sshBaseUrl || (/^(ssh:\/\/|git@)/.test(remote.baseUrl || '') ? remote.baseUrl : '');
+  if (protocol === 'https') return remote.httpsBaseUrl || (String(remote.baseUrl || '').startsWith('https://') ? remote.baseUrl : '');
+  return remote.baseUrl || remote.sshBaseUrl || remote.httpsBaseUrl || '';
 }
 
 function updateRemoteExamplePreview() {
-  const baseUrl = document.getElementById('remoteBaseUrl').value.trim();
+  const sshUrl = document.getElementById('remoteBaseUrl').value.trim();
+  const httpsUrl = document.getElementById('remoteHttpsBaseUrl').value.trim();
+  const protocol = document.getElementById('remoteDefaultProtocol');
+  if (!sshUrl && httpsUrl) protocol.value = 'https';
+  else if (sshUrl && !httpsUrl) protocol.value = 'ssh';
+  const baseUrl = protocol.value === 'https' ? httpsUrl : sshUrl;
   const preview = document.getElementById('remoteExamplePreview');
   if (!baseUrl) {
     preview.textContent = 'ssh://git@example.com:222/team/project.git';
@@ -585,6 +610,7 @@ function syncRuleFormRules() {
   targetRemoteId.required = !downloadOnly;
   targetRepoName.disabled = downloadOnly;
   targetRepoName.required = !downloadOnly;
+  document.getElementById('targetProtocol').disabled = downloadOnly;
   targetBranch.disabled = downloadOnly;
   targetBranch.required = !downloadOnly;
   sameBranchInput.disabled = downloadOnly;
@@ -661,6 +687,7 @@ function editRule(projectId, ruleId) {
   document.getElementById('sourceBranch').value = rule.sourceBranch;
   document.getElementById('targetRemoteId').value = rule.targetRemoteId || '';
   document.getElementById('targetRepoName').value = rule.targetRepoName || '';
+  document.getElementById('targetProtocol').value = rule.targetProtocol || 'default';
   document.getElementById('targetBranch').value = rule.targetBranch || '';
   document.getElementById('downloadWorkspaceRoot').value = rule.downloadWorkspaceRoot || '';
   document.getElementById('sameBranchNameExpected').checked = !!rule.sameBranchNameExpected;
@@ -682,7 +709,9 @@ function editRemote(id) {
   document.getElementById('remoteId').value = remote.id;
   document.getElementById('remoteId').disabled = true;
   document.getElementById('remoteName').value = remote.name;
-  document.getElementById('remoteBaseUrl').value = remote.baseUrl;
+  document.getElementById('remoteBaseUrl').value = remoteUrlFor(remote, 'ssh');
+  document.getElementById('remoteHttpsBaseUrl').value = remoteUrlFor(remote, 'https');
+  document.getElementById('remoteDefaultProtocol').value = String(remote.baseUrl || '').startsWith('https://') ? 'https' : 'ssh';
   document.getElementById('remoteEnabled').checked = !!remote.enabled;
   updateRemoteExamplePreview();
   openModal('remoteModal');
@@ -846,6 +875,7 @@ async function saveRule(event) {
       sourceBranch: document.getElementById('sourceBranch').value,
       targetRemoteId: downloadOnly ? '' : document.getElementById('targetRemoteId').value,
       targetRepoName: downloadOnly ? '' : document.getElementById('targetRepoName').value,
+      targetProtocol: downloadOnly ? 'default' : document.getElementById('targetProtocol').value,
       targetBranch: downloadOnly ? '' : document.getElementById('targetBranch').value,
       downloadWorkspaceRoot: downloadOnly ? document.getElementById('downloadWorkspaceRoot').value.trim() : '',
       sameBranchNameExpected: !downloadOnly && document.getElementById('sameBranchNameExpected').checked,
@@ -874,10 +904,16 @@ async function saveRemote(event) {
   event.preventDefault();
   try {
     const originalId = document.getElementById('remoteOriginalId').value;
+    const sshBaseUrl = document.getElementById('remoteBaseUrl').value.trim();
+    const httpsBaseUrl = document.getElementById('remoteHttpsBaseUrl').value.trim();
+    const baseUrl = document.getElementById('remoteDefaultProtocol').value === 'https' ? httpsBaseUrl : sshBaseUrl;
+    if (!baseUrl) throw new Error('請填寫預設連線方式的 Base URL。');
     const payload = {
       id: document.getElementById('remoteId').value,
       name: document.getElementById('remoteName').value,
-      baseUrl: document.getElementById('remoteBaseUrl').value,
+      baseUrl,
+      sshBaseUrl,
+      httpsBaseUrl,
       enabled: document.getElementById('remoteEnabled').checked,
     };
     if (originalId) {
@@ -1219,6 +1255,7 @@ function stripRuntimeFieldsFromRule(rule) {
     sourceBranch: rule.sourceBranch,
     targetRemoteId: rule.targetRemoteId,
     targetRepoName: rule.targetRepoName,
+    targetProtocol: rule.targetProtocol || 'default',
     targetBranch: rule.targetBranch,
     downloadWorkspaceRoot: rule.downloadWorkspaceRoot || '',
     sameBranchNameExpected: !!rule.sameBranchNameExpected,
@@ -1303,8 +1340,11 @@ document.getElementById('sourceBranch').addEventListener('input', syncRuleFormRu
 document.getElementById('manualOnly').addEventListener('change', syncRuleFormRules);
 document.getElementById('targetRemoteId').addEventListener('change', updateTargetUrlPreview);
 document.getElementById('targetRepoName').addEventListener('input', updateTargetUrlPreview);
+document.getElementById('targetProtocol').addEventListener('change', updateTargetUrlPreview);
 document.getElementById('targetBranch').addEventListener('input', syncRuleFormRules);
 document.getElementById('remoteBaseUrl').addEventListener('input', updateRemoteExamplePreview);
+document.getElementById('remoteHttpsBaseUrl').addEventListener('input', updateRemoteExamplePreview);
+document.getElementById('remoteDefaultProtocol').addEventListener('change', updateRemoteExamplePreview);
 document.getElementById('versionCompareDiffButton').addEventListener('click', () => {
   const ruleId = state.versionComparison?.ruleId;
   if (ruleId) {

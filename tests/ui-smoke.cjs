@@ -34,6 +34,9 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
   const context = await browser.newContext({ viewport: { width: 1440, height: 1040 }, locale: 'zh-TW', timezoneId: 'Asia/Taipei' });
   const errors = [];
   const submissions = [];
+  const ruleWrites = [];
+  let remoteConfig = { id: 'sit', name: 'SIT', baseUrl: 'ssh://git@git.example/team/',
+    sshBaseUrl: 'ssh://git@git.example/team/', httpsBaseUrl: 'https://git.example:8443/team/', enabled: true };
   const unexpectedRequests = [];
   let latestJob;
   let polls = 0;
@@ -44,7 +47,15 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     let body;
     if (pathname === '/api/system/config') body = { localWorkspaceRoot: '/workspace' };
     else if (pathname === '/api/projects') body = projects;
-    else if (pathname === '/api/remotes') body = [{ id: 'sit', name: 'SIT', baseUrl: 'ssh://git@git.example/team/', enabled: true }];
+    else if (pathname === '/api/remotes') body = [remoteConfig];
+    else if (pathname === '/api/remotes/sit' && request.method() === 'PUT') {
+      remoteConfig = request.postDataJSON();
+      body = remoteConfig;
+    } else if (pathname === '/api/projects/adm/rules/adm-sit' && request.method() === 'PUT') {
+      body = request.postDataJSON();
+      ruleWrites.push(body);
+      projects[0].rules[0] = { ...projects[0].rules[0], ...body };
+    }
     else if (pathname === '/api/version-comparison/specs') body = specs;
     else if (pathname === '/api/version-comparison/jobs' && request.method() === 'POST') {
       const submitted = request.postDataJSON();
@@ -97,6 +108,18 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     await page.getByRole('button', { name: '編輯專案', exact: true }).click();
     assert.equal(await page.locator('#projectName').inputValue(), 'fsap-adm');
     await page.keyboard.press('Escape');
+    await page.locator('.project-rules .action-menu summary').first().click();
+    await page.getByRole('button', { name: '編輯規則', exact: true }).first().click();
+    assert.equal(await page.locator('#targetProtocol').inputValue(), 'default');
+    await page.locator('#targetProtocol').selectOption('https');
+    assert.equal(await page.locator('#targetUrlPreview').textContent(), 'https://git.example:8443/team/project.git');
+    await page.locator('#ruleForm button[type="submit"]').click();
+    await page.locator('#ruleModal').waitFor({ state: 'hidden' });
+    assert.equal(ruleWrites.at(-1).targetProtocol, 'https');
+    await page.locator('.project-rules .action-menu summary').first().click();
+    await page.getByRole('button', { name: '編輯規則', exact: true }).first().click();
+    assert.equal(await page.locator('#targetProtocol').inputValue(), 'https');
+    await page.keyboard.press('Escape');
     await page.locator('#ruleFilterKeyword').fill('does-not-exist');
     assert.equal(await page.locator('.filter-empty').count(), 1);
     await page.locator('#clearRuleFiltersButton').click();
@@ -116,6 +139,13 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     assert.equal(await page.locator('#globalWorkspaceRoot').inputValue(), '/workspace');
     await page.getByRole('navigation').getByRole('link', { name: 'Remote 管理' }).click();
     await page.locator('#remoteTable').waitFor({ state: 'visible' });
+    await page.locator('#remoteTable').getByRole('button', { name: '編輯', exact: true }).click();
+    assert.equal(await page.locator('#remoteDefaultProtocol').inputValue(), 'ssh');
+    await page.locator('#remoteDefaultProtocol').selectOption('https');
+    await page.locator('#remoteForm button[type="submit"]').click();
+    await page.locator('#remoteModal').waitFor({ state: 'hidden' });
+    assert.equal(remoteConfig.baseUrl, 'https://git.example:8443/team/');
+    assert.equal(remoteConfig.sshBaseUrl, 'ssh://git@git.example/team/');
     await page.getByRole('navigation').getByRole('link', { name: '專案同步' }).click();
     await page.getByRole('heading', { name: '專案同步', exact: true }).waitFor();
     if (artifactDir) { await fs.mkdir(artifactDir, { recursive: true }); await page.screenshot({ path: path.join(artifactDir, 'projects-desktop.png'), fullPage: true }); }
@@ -167,7 +197,7 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     assert.ok((await font.body()).length > 100000);
     assert.deepEqual(errors, []);
     assert.deepEqual(unexpectedRequests, []);
-    console.log('UI smoke checks passed: navigation, filtering, modal keyboard focus, batch selection/polling/rerun, commit review, responsive layout, local fonts, reduced motion.');
+    console.log('UI smoke checks passed: SSH/HTTPS preview/save/reopen, Remote default selection, navigation, filtering, modal focus, batch selection, commit review, responsive layout, local fonts, reduced motion.');
   } finally {
     await browser.close();
   }

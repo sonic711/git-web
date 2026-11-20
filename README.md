@@ -7,6 +7,7 @@
 1. 使用者先建立一個專案，再在專案底下建立多條同步規則。
 2. 系統保存一份全局本地主目錄，專案只保存廠商 repo 的 URL 與本地專案資料夾名稱；廠商 URL 可使用 `http`、`https` 或 `ssh`。
 3. 規則保存來源 branch、目標 remote、目標 branch、排程與 force push 選項。
+   每個 Remote 可分別設定 SSH／HTTPS Base URL，規則可選擇連線方式；舊規則預設沿用原本的 URL。
 4. 同一個專案可同時有 `sit -> sit`、`sit2 -> sit2`、`uat -> uat` 等多條規則。
 5. 自動同步規則仍可手動同步，不需為了 `-f` 額外建立新規則。
 6. 系統會先檢查實際 repo 路徑是否已有 repo；若沒有則先 `clone`。

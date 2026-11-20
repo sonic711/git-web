@@ -44,7 +44,8 @@ final class GitService {
         }
         if (rule.isSyncMode()) {
             RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
-            ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && remote.baseUrl != null && !remote.baseUrl.isBlank());
+            String baseUrl = remote.baseUrlFor(rule.targetProtocol);
+            ok &= addCheck(checks, "target_remote_template_exists", remote.enabled && baseUrl != null && !baseUrl.isBlank());
             ok &= addCheck(checks, "target_repo_name_valid", rule.targetRepoName != null && rule.targetRepoName.endsWith(".git"));
         } else {
             ok &= addCheck(checks, "download_only_no_target_required", true);
@@ -499,7 +500,10 @@ final class GitService {
 
     String targetRemoteUrl(AppConfig config, RuleConfig rule) {
         RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
-        return Models.buildGitUrl(remote.baseUrl, rule.targetRepoName);
+        String baseUrl = remote.baseUrlFor(rule.targetProtocol);
+        Models.require(baseUrl != null && !baseUrl.isBlank(),
+            "Remote has no URL for targetProtocol=" + rule.targetProtocol + "; configure the Remote URL first");
+        return Models.buildGitUrl(baseUrl, rule.targetRepoName);
     }
 
     private boolean isGitRepo(Path path) throws IOException, InterruptedException {

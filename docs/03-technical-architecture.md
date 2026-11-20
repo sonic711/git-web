@@ -171,7 +171,8 @@ Git Bridge 透過 `ProcessBuilder` 呼叫系統安裝的 `git` 指令。
 - `projects`：專案清單
 - `projects[*].rules`：該專案底下的同步規則
 - `remotes[*].name`：Remote 頁籤名稱
-- `remotes[*].baseUrl`：Remote 的 SSH base URL
+- `remotes[*].baseUrl`：Remote 的預設 Base URL；`sshBaseUrl` 與 `httpsBaseUrl` 保存兩種連線端點
+- `rules[*].targetProtocol`：`default | ssh | https`，決定組合目標 Repo URL 時使用的端點
 - `rules[*].targetRepoName`：實際專案名稱，例如 `fsap-adm.git`
 - `sameBranchNameExpected`：是否預期來源與目標分支同名，UI 可據此自動帶入預設值
 - `manualOnly`：是否僅允許手動同步
@@ -445,7 +446,7 @@ Java 服務需內建背景排程器：
 - 背景排程執行多筆 rule
 - 特定 rule 可設定為 manual-only 與 review-required
 - 廠商來源可為 `HTTP`、`HTTPS` 或 `SSH`
-- 目標 remote 為 `SSH`
+- 目標 remote 支援 `SSH` 與 `HTTPS`，依同步規則選擇端點；認證交由執行服務的帳號與系統 Git 設定處理
 - 單一 JSON 主設定檔
 - runtime state 檔
 - 文字 log

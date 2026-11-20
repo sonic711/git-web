@@ -193,6 +193,13 @@
         </label>
         <label>來源 Branch<input id="sourceBranch" required></label>
         <label class="sync-only-field">目標頁籤模板<select id="targetRemoteId" required></select></label>
+        <label class="sync-only-field">目標連線方式
+          <select id="targetProtocol">
+            <option value="default">沿用 Remote 預設</option>
+            <option value="ssh">SSH</option>
+            <option value="https">HTTPS</option>
+          </select>
+        </label>
         <label class="sync-only-field">目標專案名稱<input id="targetRepoName" placeholder="project.git" required></label>
         <div class="preview-box sync-only-field">
           <div class="preview-label">目標 URL</div>
@@ -226,7 +233,7 @@
       <div class="modal-head">
         <div>
           <h2 id="remoteModalTitle">新增 Remote Tab</h2>
-          <p class="panel-copy">Remote Tab 只保存頁籤名稱與 base URL。</p>
+          <p class="panel-copy">分別設定 SSH 與 HTTPS URL，規則可選擇要使用哪一種。至少填寫一種。</p>
         </div>
         <button type="button" class="secondary icon-button" data-close-modal="remoteModal">關閉</button>
       </div>
@@ -234,7 +241,9 @@
         <input type="hidden" id="remoteOriginalId">
         <label>Remote ID<input id="remoteId" required></label>
         <label>頁籤名稱<input id="remoteName" required></label>
-        <label>Base URL<input id="remoteBaseUrl" placeholder="ssh://git@example.com:222/team/" required></label>
+        <label>SSH Base URL<input id="remoteBaseUrl" placeholder="ssh://git@example.com:222/team/"></label>
+        <label>HTTPS Base URL<input id="remoteHttpsBaseUrl" placeholder="https://example.com/team/"></label>
+        <label>預設連線方式<select id="remoteDefaultProtocol"><option value="ssh">SSH</option><option value="https">HTTPS</option></select></label>
         <label class="checkbox"><input type="checkbox" id="remoteEnabled" checked>啟用此頁籤模板</label>
         <div class="preview-box">
           <div class="preview-label">範例</div>

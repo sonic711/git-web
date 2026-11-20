@@ -204,6 +204,14 @@ uat -> UAT / uat（12 個專案）
 10. 已建立 job 後，畫面需顯示本次選取的 project 數量；「重新比對本批」沿用原 job 的 project 選取範圍。
 11. job 輪詢不可重設專案勾選，使用者可在比對期間選擇下一批要比對的專案。
 
+## 目標連線方式
+
+Remote 編輯視窗提供 SSH Base URL、HTTPS Base URL 與預設連線方式，至少需填寫預設連線方式的 URL。
+
+同步規則的「目標連線方式」提供「沿用 Remote 預設」、「SSH」、「HTTPS」。未配置的協定選項 disabled；切換後即時更新目標 URL 預覽，儲存後寫入 `targetProtocol`。只下載規則隱藏並停用此控制項。
+
+HTTPS 認證沿用系統 Git credential helper 或既有認證設定。網頁不另行保存密碼或 access token；啟用排程前應在執行服務的同一帳號下完成認證。
+
 ## Settings 區
 
 用途：

@@ -132,11 +132,17 @@
   "id": "target-uat",
   "name": "UAT",
   "baseUrl": "ssh://git@example.com:222/team/",
+  "sshBaseUrl": "ssh://git@example.com:222/team/",
+  "httpsBaseUrl": "https://example.com/team/",
   "enabled": true
 }
 ```
 
 ### `PUT /api/remotes/{id}`
+
+Remote 的 `baseUrl` 保存預設端點，`sshBaseUrl`、`httpsBaseUrl` 分別保存 SSH 與 HTTPS 端點；三個欄位會寫入設定檔並參與匯入／匯出。舊設定僅提供 `baseUrl` 時仍可使用。
+
+同步規則 API 接受 `targetProtocol=default|ssh|https`；缺漏預設為 `default`，`download-only` 時忽略。指定的協定未配置 URL 時回傳 `400 INVALID_REQUEST`。`GET /api/projects` 的 `targetRemoteBaseUrl` 與 `targetRemoteUrl` 依每筆規則的實際選擇回傳。
 
 用途：
 

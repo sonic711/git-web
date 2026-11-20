@@ -19,7 +19,7 @@
 ## 已確認規格
 
 - 廠商來源可使用 `HTTP`、`HTTPS` 或 `SSH` repo URL。
-- 目標 remote 使用 `SSH` URL。
+- 目標 remote 使用 `SSH` 或 `HTTPS` URL。Remote 可分別保存兩種 Base URL，rule 的 `targetProtocol` 選擇使用哪一種，未設定時沿用 Remote 預設。
 - 若本機指定目錄沒有 repo，系統需先 clone。
 - 若本機指定目錄已有 repo，系統需直接使用並更新。
 - UI 用 `checkbox` 控制本次同步是否執行 `git push -f`。
@@ -140,7 +140,7 @@
 9. 驗證 `origin/<sourceBranch>` 存在。
 10. 將本地 `sourceBranch` 強制對齊 `origin/<sourceBranch>`，避免廠商 force push 後本地歷程偏移。
 11. 執行 `git pull --ff-only origin <sourceBranch>`。
-12. 以 `remote.baseUrl + rule.targetRepoName` 組出完整目標 remote URL。
+12. 依 `rule.targetProtocol` 選擇 Remote 的預設、SSH 或 HTTPS Base URL，再加上 `rule.targetRepoName` 組出目標 URL。
 13. 建立或更新目標 remote。
 14. 若 rule 設定為 `reviewRequired=true`，先產出 ahead commit 清單。
 15. 允許使用者挑選本次要同步的 commit。

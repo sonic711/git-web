@@ -7,6 +7,8 @@
       "id": "target-sit",
       "name": "SIT",
       "baseUrl": "ssh://git@example.com:222/team/",
+      "sshBaseUrl": "ssh://git@example.com:222/team/",
+      "httpsBaseUrl": "https://example.com/team/",
       "enabled": true
     }
   ],
@@ -25,6 +27,7 @@
           "sourceBranch": "sit",
           "targetRemoteId": "target-sit",
           "targetRepoName": "fsap-adm.git",
+          "targetProtocol": "default",
           "targetBranch": "sit",
           "sameBranchNameExpected": true,
           "enabled": true,

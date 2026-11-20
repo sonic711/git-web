@@ -733,7 +733,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
                 } else {
                     RemoteConfig remote = Models.findRemote(config, rule.targetRemoteId);
                     ruleItem.put("targetRemoteName", remote.name);
-                    ruleItem.put("targetRemoteBaseUrl", remote.baseUrl);
+                    ruleItem.put("targetRemoteBaseUrl", remote.baseUrlFor(rule.targetProtocol));
                     ruleItem.put("targetRemoteUrl", gitService.targetRemoteUrl(config, rule));
                 }
                 ruleItem.put("lastRunAt", state.lastRunAt);

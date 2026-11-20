@@ -101,7 +101,7 @@ final class ConfigService {
     }
 
     synchronized void upsertRemote(RemoteConfig remote) throws IOException {
-        AppConfig config = current;
+        AppConfig config = AppConfig.fromMap(current.toMap());
         boolean replaced = false;
         for (int i = 0; i < config.remotes.size(); i++) {
             if (config.remotes.get(i).id.equals(remote.id)) {
@@ -157,7 +157,7 @@ final class ConfigService {
     }
 
     synchronized void upsertRule(String projectId, RuleConfig rule) throws IOException {
-        AppConfig config = current;
+        AppConfig config = AppConfig.fromMap(current.toMap());
         ProjectConfig project = Models.findProject(config, projectId);
         boolean replaced = false;
         for (int i = 0; i < project.rules.size(); i++) {
@@ -281,8 +281,12 @@ final class ConfigService {
             Models.require(remoteIds.add(remote.id), "duplicate remote id: " + remote.id);
             Models.require(remote.name != null && !remote.name.isBlank(), "remote name is required");
             Models.require(remote.baseUrl != null && !remote.baseUrl.isBlank(), "remote baseUrl is required");
-            Models.require(remote.baseUrl.startsWith("git@") || remote.baseUrl.startsWith("ssh://"),
-                "remote baseUrl must be SSH");
+            Models.require(Models.isSshUrl(remote.baseUrl) || remote.baseUrl.startsWith("https://"),
+                "remote baseUrl must be SSH or HTTPS");
+            Models.require(remote.sshBaseUrl == null || remote.sshBaseUrl.isBlank() || Models.isSshUrl(remote.sshBaseUrl),
+                "remote sshBaseUrl must be SSH");
+            Models.require(remote.httpsBaseUrl == null || remote.httpsBaseUrl.isBlank() || remote.httpsBaseUrl.startsWith("https://"),
+                "remote httpsBaseUrl must start with https://");
         }
 
         Set<String> projectIds = new HashSet<>();
@@ -308,6 +312,9 @@ final class ConfigService {
                     Models.require(rule.targetRepoName.endsWith(".git"), "targetRepoName must end with .git");
                     Models.require(rule.targetBranch != null && !rule.targetBranch.isBlank(), "targetBranch is required");
                     Models.require(remoteIds.contains(rule.targetRemoteId), "targetRemoteId does not exist: " + rule.targetRemoteId);
+                    String targetBaseUrl = Models.findRemote(config, rule.targetRemoteId).baseUrlFor(rule.targetProtocol);
+                    Models.require(targetBaseUrl != null && !targetBaseUrl.isBlank(),
+                        "Remote has no URL for targetProtocol=" + rule.targetProtocol + "; configure the Remote URL first");
                 } else {
                     Models.require(!rule.reviewRequired, "download-only rules must not require review");
                 }

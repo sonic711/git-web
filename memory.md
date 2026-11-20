@@ -10,6 +10,8 @@
 
 ## 目前狀態
 
+- 2026-11-20：已新增規則目標 SSH／HTTPS 選擇與 Remote 雙 URL／預設端點設定，並更新 schema、API 與 UI 文件。Java 測試覆蓋舊設定、僅 HTTPS、儲存／匯入匯出、端點驗證及本地 Git remote 切換；UI 測試覆蓋預覽、儲存、重新開啟與預設端點切換。
+
 - 2026-10-21：改版前工作區乾淨，`84fb51b` 已建立 `pre-ui-redesign-20261021` tag 並推送 `origin` 與 `bt`。
 - UI/UX 依 UI UX Pro Max 與 Vercel Web Design Guidelines 改為同步優先工作區；設計、導覽與驗證依據見 `docs/15-ui-ux-redesign.md`。
 - 新增共用 `static/ui.js`，字型本地化，modal 支援焦點限制與 Escape；批次 job 輪詢不再重設專案選取，重新比對本批保留原 job 範圍。
@@ -29,7 +31,7 @@
 - Git 執行方式為 Java 透過 `ProcessBuilder` 呼叫系統 `git`。
 - 不使用資料庫。
 - 廠商 repo 可使用 `HTTP`、`HTTPS` 或 `SSH`。
-- 目標 remote 使用 `SSH`。
+- 目標 remote 支援 `SSH` 與 `HTTPS`，Remote 保存 `baseUrl` 預設端點及 `sshBaseUrl`／`httpsBaseUrl`；rule 的 `targetProtocol=default|ssh|https` 選擇端點。舊設定缺漏時沿用原本 URL；不可單純替換 scheme 猜測端點。HTTPS 認證沿用系統 Git。
 - 若本機目錄沒有 repo，需先 `clone`。
 - 若本機目錄已有 repo，需直接 `fetch` 後同步。
 - UI 使用 `checkbox` 控制本次是否 `git push -f`。
