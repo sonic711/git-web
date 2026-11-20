@@ -214,6 +214,8 @@ HTTPS 認證沿用系統 Git credential helper 或既有認證設定。網頁不
 
 ## Settings 區
 
+設定區增加「工作目錄與設定檔」及「HTTPS 憑證」分頁。`/#certificates` 支援匯入、編輯、啟用／停用及刪除指定 HTTPS 前綴的公開憑證，顯示有效期間與憑證組指紋。匯入錯誤顯示於表單並聚焦錯誤訊息，儲存成功後提示下一次 Git 操作生效。詳見 `docs/16-https-certificates.md`。
+
 用途：
 
 - 修改全局本地主目錄

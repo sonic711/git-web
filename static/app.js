@@ -11,6 +11,7 @@ const DEFAULT_RULE_FILTERS = Object.freeze({
 const state = {
   projects: [],
   remotes: [],
+  certificates: [],
   systemConfig: { localWorkspaceRoot: '' },
   selectedRemoteTab: 'all',
   ruleFilters: loadRuleFilters(),
@@ -1267,6 +1268,117 @@ function stripRuntimeFieldsFromRule(rule) {
   };
 }
 
+async function loadCertificates(showLoader = true) {
+  try {
+    const action = () => api('/api/system/certificates');
+    state.certificates = await (showLoader ? withLoading('載入 HTTPS 憑證中…', action) : action());
+    renderCertificates();
+  } catch (error) {
+    document.getElementById('certificateList').textContent = `無法載入憑證：${error.message}`;
+    showToast(error.message, 'error');
+  }
+}
+
+function renderCertificates() {
+  const list = document.getElementById('certificateList');
+  if (!state.certificates.length) {
+    list.innerHTML = '<div class="filter-empty"><strong>尚未匯入 HTTPS 憑證</strong><span>若內部 Git 使用自簽憑證，請匯入對應的 CA 或伺服器憑證並指定網域。</span></div>';
+    return;
+  }
+  list.innerHTML = state.certificates.map(certificate => {
+    const validity = { VALID: '有效', EXPIRED: '已過期', NOT_YET_VALID: '尚未生效' }[certificate.validity] || '未確認';
+    return `<article class="certificate-card">
+      <div class="certificate-head">
+        <div><h3>${escapeHtml(certificate.name)}</h3>
+          <span class="tag ${certificate.enabled ? 'success' : ''}">${certificate.enabled ? '已啟用' : '已停用'}</span>
+          <span class="tag ${certificate.validity === 'VALID' ? 'success' : 'warning'}">${validity}</span>
+          <span class="tag">${Number(certificate.certificateCount || 0)} 張憑證</span>
+        </div>
+        <div class="inline-actions">
+          <button type="button" class="secondary" data-certificate-action="edit" data-certificate-id="${escapeAttr(certificate.id)}">編輯</button>
+          <button type="button" class="secondary" data-certificate-action="toggle" data-certificate-id="${escapeAttr(certificate.id)}">${certificate.enabled ? '停用' : '啟用'}</button>
+          <button type="button" class="secondary danger" data-certificate-action="delete" data-certificate-id="${escapeAttr(certificate.id)}">刪除</button>
+        </div>
+      </div>
+      <code>${escapeHtml(certificate.urlPrefix)}</code>
+      <p>有效期間：${escapeHtml(formatDateTime(certificate.notBefore))} 至 ${escapeHtml(formatDateTime(certificate.notAfter))}</p>
+      <details><summary>憑證詳細資訊</summary>
+        <p>主體：${escapeHtml(certificate.subject)}</p><p>簽發者：${escapeHtml(certificate.issuer)}</p>
+        <p>憑證組 SHA-256</p><code>${escapeHtml(certificate.sha256)}</code>
+      </details>
+    </article>`;
+  }).join('');
+}
+
+function editCertificate(id = '') {
+  const certificate = state.certificates.find(item => item.id === id);
+  document.getElementById('certificateForm').reset();
+  document.getElementById('certificateId').value = certificate?.id || '';
+  document.getElementById('certificateName').value = certificate?.name || '';
+  document.getElementById('certificateUrlPrefix').value = certificate?.urlPrefix || '';
+  document.getElementById('certificateEnabled').checked = certificate ? certificate.enabled : true;
+  document.getElementById('certificateFile').required = !certificate;
+  document.getElementById('certificateFormError').classList.add('hidden');
+  document.getElementById('certificateModalTitle').textContent = certificate ? '編輯 HTTPS 憑證' : '匯入 HTTPS 憑證';
+  openModal('certificateModal');
+}
+
+async function saveCertificate(event) {
+  event.preventDefault();
+  const errorView = document.getElementById('certificateFormError');
+  errorView.classList.add('hidden');
+  try {
+    const id = document.getElementById('certificateId').value;
+    const file = document.getElementById('certificateFile').files[0];
+    const payload = {
+      name: document.getElementById('certificateName').value.trim(),
+      urlPrefix: document.getElementById('certificateUrlPrefix').value.trim(),
+      enabled: document.getElementById('certificateEnabled').checked,
+    };
+    await withLoading('驗證並儲存 HTTPS 憑證中…', async () => {
+      if (file) {
+        if (!file.size || file.size > 262144) throw new Error('請選擇不超過 256 KB 的公開憑證檔案。');
+        payload.contentBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = () => reject(new Error('無法讀取憑證檔案，請重新選擇。'));
+          reader.readAsDataURL(file);
+        });
+      }
+      await api(`/api/system/certificates${id ? '/' + encodeURIComponent(id) : ''}`, {
+        method: id ? 'PUT' : 'POST', body: JSON.stringify(payload),
+      });
+      await loadCertificates(false);
+    });
+    closeModal('certificateModal');
+    showToast('HTTPS 憑證設定已儲存，下一次 Git 操作即生效。');
+  } catch (error) {
+    errorView.textContent = error.message;
+    errorView.classList.remove('hidden');
+    errorView.focus();
+  }
+}
+
+async function handleCertificateAction(event) {
+  const button = event.target.closest('[data-certificate-action]');
+  if (!button) return;
+  const certificate = state.certificates.find(item => item.id === button.dataset.certificateId);
+  if (!certificate) return;
+  const action = button.dataset.certificateAction;
+  if (action === 'edit') { editCertificate(certificate.id); return; }
+  if (action === 'delete' && !confirm(`刪除「${certificate.name}」？後續 Git 操作將不再使用這筆信任設定。`)) return;
+  try {
+    await withLoading('更新憑證設定中…', async () => {
+      await api(`/api/system/certificates/${encodeURIComponent(certificate.id)}`, {
+        method: action === 'delete' ? 'DELETE' : 'PUT',
+        body: action === 'delete' ? undefined : JSON.stringify({ name: certificate.name, urlPrefix: certificate.urlPrefix, enabled: !certificate.enabled }),
+      });
+      await loadCertificates(false);
+    });
+    showToast(action === 'delete' ? '已刪除憑證設定' : '已更新憑證狀態');
+  } catch (error) { showToast(error.message, 'error'); }
+}
+
 const ModelsId = {
   project() {
     return `project-${Date.now()}`;
@@ -1290,6 +1402,14 @@ function escapeAttr(value) {
 }
 
 document.getElementById('projectForm').addEventListener('submit', saveProject);
+document.getElementById('certificateForm').addEventListener('submit', saveCertificate);
+document.getElementById('newCertificateButton').addEventListener('click', () => editCertificate());
+document.getElementById('refreshCertificatesButton').addEventListener('click', () => loadCertificates());
+document.getElementById('certificateList').addEventListener('click', handleCertificateAction);
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#certificates') loadCertificates();
+});
+if (location.hash === '#certificates') loadCertificates();
 document.getElementById('ruleForm').addEventListener('submit', saveRule);
 document.getElementById('remoteForm').addEventListener('submit', saveRemote);
 document.getElementById('saveSystemSettingsButton').addEventListener('click', saveSystemSettings);

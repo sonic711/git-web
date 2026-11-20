@@ -98,6 +98,8 @@
   目標 remote 清單
 - `projects`: `array`
   專案清單，每個專案底下包含多條同步規則
+- `trustedCertificates`: `array`
+  HTTPS 信任設定，缺漏時為空陣列。每筆保存 `id`、`name`、`urlPrefix`、`enabled` 與標準 PEM `pem`；公開憑證隨設定檔匯出／匯入。詳細結構與前綴規則見 [HTTPS 憑證設定](16-https-certificates.md)。
 
 ### Remote
 

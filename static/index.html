@@ -28,6 +28,10 @@
   </div>
 
   <main class="layout" id="mainContent" tabindex="-1">
+    <nav class="settings-tabs" data-workspace-view="settings certificates" hidden aria-label="設定分頁">
+      <a href="#settings">工作目錄與設定檔</a>
+      <a href="#certificates">HTTPS 憑證</a>
+    </nav>
     <section class="overview-grid" data-workspace-view="projects" aria-label="同步概況">
       <div class="overview-item"><span>專案總數</span><strong id="overviewProjects">0</strong><small>集中管理來源專案</small></div>
       <div class="overview-item"><span>同步規則</span><strong id="overviewRules">0</strong><small id="overviewDownloadRules">包含同步與本地下載</small></div>
@@ -55,6 +59,21 @@
         </div>
         <input type="file" id="importConfigFile" accept="application/json,.json" class="hidden">
       </div>
+    </section>
+
+    <section class="panel" data-workspace-view="certificates" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>信任的 HTTPS 憑證</h2>
+          <p class="panel-copy">匯入內部 CA 或自簽伺服器憑證，指定要套用的網域與路徑。適用於來源和目標 HTTPS Repo。</p>
+        </div>
+        <div class="inline-actions">
+          <button type="button" class="secondary" id="refreshCertificatesButton" data-icon="refresh">重新載入</button>
+          <button type="button" id="newCertificateButton" data-icon="plus">匯入憑證</button>
+        </div>
+      </div>
+      <p class="certificate-hint">支援 PEM／DER 格式的 .pem、.crt、.cer 與憑證鏈（每檔最多 256 KB）。憑證及網域設定會包含在設定檔匯出中；不會關閉 SSL 驗證或修改全域 Git 設定。</p>
+      <div id="certificateList" class="certificate-list" aria-live="polite">尚未載入憑證</div>
     </section>
 
     <section class="panel projects-panel" data-workspace-view="projects">
@@ -273,6 +292,30 @@
         <button type="button" class="secondary" id="versionCompareDiffButton">查看差異</button>
         <button type="button" data-close-modal="versionCompareModal">完成</button>
       </div>
+    </section>
+  </div>
+
+  <div id="certificateModal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal="certificateModal"></div>
+    <section class="modal-card">
+      <div class="modal-head">
+        <div><h2 id="certificateModalTitle">匯入 HTTPS 憑證</h2><p class="panel-copy">請匯入公開憑證，不要匯入私鑰或 PFX／P12 檔案。</p></div>
+        <button type="button" class="secondary" data-close-modal="certificateModal">關閉</button>
+      </div>
+      <form id="certificateForm" class="form-grid">
+        <input type="hidden" id="certificateId">
+        <label>憑證名稱<input id="certificateName" required placeholder="例如：公司內部 Git CA"></label>
+        <label>HTTPS 網域／URL 前綴<input id="certificateUrlPrefix" required placeholder="https://git.example.com:8443/team/" aria-describedby="certificatePrefixHelp"></label>
+        <p class="panel-copy" id="certificatePrefixHelp">可填 git.example.com 或完整 HTTPS URL。只套用到相同主機、連接埠與路徑前綴，不會擴及其他子網域。</p>
+        <label>憑證檔案<input type="file" id="certificateFile" accept=".pem,.crt,.cer" required aria-describedby="certificateFileHelp"></label>
+        <p class="panel-copy" id="certificateFileHelp">編輯時若不選新檔案，會保留原憑證。</p>
+        <label class="checkbox"><input type="checkbox" id="certificateEnabled" checked>啟用此憑證設定</label>
+        <p id="certificateFormError" class="certificate-form-error hidden" role="alert" tabindex="-1"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" data-close-modal="certificateModal">取消</button>
+          <button type="submit">儲存憑證</button>
+        </div>
+      </form>
     </section>
   </div>
 

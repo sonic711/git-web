@@ -53,6 +53,7 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         this.configService = configService;
         this.runtimeStateService = runtimeStateService;
         this.gitService = gitService;
+        gitService.configureHttpsTrust(new HttpsTrustService(configService));
         this.logService = logService;
         this.diffCacheService = diffCacheService;
         this.staticDir = staticDir;
@@ -107,6 +108,10 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
     private void handleSystem(HttpExchange exchange) throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
+            if (path.equals("/api/system/certificates") || path.startsWith("/api/system/certificates/")) {
+                handleCertificates(exchange);
+                return;
+            }
             if ("GET".equals(exchange.getRequestMethod()) && "/api/system/config".equals(path)) {
                 AppConfig config = configService.getConfig();
                 HttpUtil.sendJson(exchange, 200, Map.of(
@@ -155,6 +160,48 @@ final class AppServer implements SchedulerService.SyncOrchestrator {
         } catch (Exception exception) {
             HttpUtil.sendJson(exchange, 400, HttpUtil.error("INVALID_REQUEST", exception.getMessage(), Map.of()));
         }
+    }
+
+    private void handleCertificates(HttpExchange exchange) throws Exception {
+        String path = exchange.getRequestURI().getPath();
+        String method = exchange.getRequestMethod();
+        String base = "/api/system/certificates";
+        if (path.equals(base) && method.equals("GET")) {
+            HttpUtil.sendJson(exchange, 200, configService.getConfig().trustedCertificates.stream().map(TrustedCertificate::view).toList());
+            return;
+        }
+        String id = path.startsWith(base + "/") ? path.substring(base.length() + 1) : null;
+        if (id != null && method.equals("DELETE")) {
+            configService.deleteCertificate(id);
+            HttpUtil.sendJson(exchange, 200, Map.of("deleted", true));
+            return;
+        }
+        if ((path.equals(base) && method.equals("POST")) || (id != null && method.equals("PUT"))) {
+            Map<String, Object> body = HttpUtil.readJsonObject(exchange);
+            TrustedCertificate existing = null;
+            if (id != null) {
+                for (TrustedCertificate certificate : configService.getConfig().trustedCertificates) {
+                    if (certificate.id.equals(id)) existing = certificate;
+                }
+                Models.require(existing != null, "Certificate not found");
+            }
+            String encoded = Models.nullableString(body.get("contentBase64"));
+            byte[] content;
+            if (encoded == null || encoded.isBlank()) {
+                Models.require(existing != null, "Select a certificate file");
+                content = existing.pem.getBytes(StandardCharsets.US_ASCII);
+            } else {
+                Models.require(encoded.length() <= 4 * ((TrustedCertificate.MAX_BYTES + 2) / 3), "Certificate file exceeds 256 KB");
+                content = java.util.Base64.getDecoder().decode(encoded);
+            }
+            TrustedCertificate certificate = new TrustedCertificate(id == null ? "cert-" + java.util.UUID.randomUUID() : id,
+                Models.stringValue(body.get("name")), Models.stringValue(body.get("urlPrefix")), content,
+                Models.booleanValue(body.getOrDefault("enabled", Boolean.TRUE)));
+            configService.upsertCertificate(certificate);
+            HttpUtil.sendJson(exchange, id == null ? 201 : 200, certificate.view());
+            return;
+        }
+        HttpUtil.sendJson(exchange, 405, HttpUtil.error("METHOD_NOT_ALLOWED", "Method not allowed", Map.of()));
     }
 
     private void handleRemotes(HttpExchange exchange) throws IOException {

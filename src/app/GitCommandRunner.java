@@ -5,11 +5,22 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 final class GitCommandRunner {
+    private HttpsTrustService httpsTrustService;
+
+    void setHttpsTrustService(HttpsTrustService service) {
+        httpsTrustService = service;
+    }
+
     GitCommandResult run(Path workDir, List<String> command) throws IOException, InterruptedException {
-        ProcessBuilder builder = new ProcessBuilder(command);
+        List<String> effectiveCommand = new ArrayList<>(command);
+        if (httpsTrustService != null && !command.isEmpty() && command.get(0).equals("git")) {
+            effectiveCommand.addAll(1, httpsTrustService.gitArguments());
+        }
+        ProcessBuilder builder = new ProcessBuilder(effectiveCommand);
         if (workDir != null) {
             builder.directory(workDir.toFile());
         }

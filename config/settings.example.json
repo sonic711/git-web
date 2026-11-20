@@ -2,6 +2,7 @@
   "version": 1,
   "updatedAt": "2026-04-21T12:00:00+08:00",
   "localWorkspaceRoot": "D:/git-workspace",
+  "trustedCertificates": [],
   "remotes": [
     {
       "id": "target-sit",

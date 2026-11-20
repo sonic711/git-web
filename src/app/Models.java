@@ -24,12 +24,16 @@ final class Models {
         String localWorkspaceRoot;
         List<RemoteConfig> remotes = new ArrayList<>();
         List<ProjectConfig> projects = new ArrayList<>();
+        List<TrustedCertificate> trustedCertificates = new ArrayList<>();
 
         static AppConfig fromMap(Map<String, Object> map) {
             AppConfig config = new AppConfig();
             config.version = intValue(map.getOrDefault("version", 1));
             config.updatedAt = stringValue(map.getOrDefault("updatedAt", nowIso()));
             config.localWorkspaceRoot = nullableString(map.get("localWorkspaceRoot"));
+            for (Object item : Json.asList(map.getOrDefault("trustedCertificates", List.of()))) {
+                config.trustedCertificates.add(TrustedCertificate.fromMap(Json.asObject(item)));
+            }
             for (Object item : Json.asList(map.getOrDefault("remotes", List.of()))) {
                 config.remotes.add(RemoteConfig.fromMap(Json.asObject(item)));
             }
@@ -47,6 +51,7 @@ final class Models {
             map.put("version", version);
             map.put("updatedAt", updatedAt);
             map.put("localWorkspaceRoot", localWorkspaceRoot);
+            map.put("trustedCertificates", trustedCertificates.stream().map(certificate -> certificate.toMap(true)).toList());
             List<Object> remoteList = new ArrayList<>();
             for (RemoteConfig remote : remotes) {
                 remoteList.add(remote.toMap());

@@ -7,6 +7,7 @@
     remote: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M15 6.5h3M15 17.5h3"/>',
     activity: '<path d="M4 3h16v18H4zM8 7h8M8 11h8M8 15h5"/>',
     settings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="9" cy="18" r="2"/>',
+    shield: '<path d="M12 3 3 7v6c0 4 5 7 9 9 4-2 9-5 9-9V7zM8 12l3 3 5-6"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     refresh: '<path d="M20 7a9 9 0 1 0 1 8M20 3v5h-5"/>',
     push: '<path d="M12 16V3M7 8l5-5 5 5M4 15v6h16v-6"/>',
@@ -26,6 +27,7 @@
     ['remotes', 'Remote 管理', '/#remotes', 'remote'],
     ['activity', '執行紀錄', '/#activity', 'activity'],
     ['settings', '工作區設定', '/#settings', 'settings'],
+    ['certificates', 'HTTPS 憑證', '/#certificates', 'shield'],
   ];
   document.body.insertAdjacentHTML('afterbegin', `
     <aside class="app-sidebar" aria-label="工作區側欄">
@@ -41,6 +43,7 @@
     remotes: ['Remote 管理', 'DESTINATION TEMPLATES', '依環境組織目標倉庫，重複使用連線設定。'],
     activity: ['執行紀錄', 'ACTIVITY & REVIEW', '檢視最近載入的執行結果與差異審查資訊。'],
     settings: ['工作區設定', 'WORKSPACE SETTINGS', '管理本地儲存位置與可攜式設定檔。'],
+    certificates: ['HTTPS 憑證', 'TRUSTED CONNECTIONS', '依網域管理內部 CA 與自簽憑證，保留 HTTPS 驗證。'],
   };
   function navigate() {
     const key = isDashboard && Object.hasOwn(views, location.hash.slice(1)) ? location.hash.slice(1) : 'projects';
@@ -50,7 +53,11 @@
       else link.removeAttribute('aria-current');
     });
     if (!isDashboard) return;
-    document.querySelectorAll('[data-workspace-view]').forEach(panel => { panel.hidden = panel.dataset.workspaceView !== key; });
+    document.querySelectorAll('[data-workspace-view]').forEach(panel => { panel.hidden = !panel.dataset.workspaceView.split(' ').includes(key); });
+    document.querySelectorAll('.settings-tabs a').forEach(link => {
+      if (link.hash === `#${key}`) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
     const [title, eyebrow, description] = views[key];
     document.getElementById('workspaceTitle').textContent = title;
     document.getElementById('workspaceBreadcrumb').textContent = title;

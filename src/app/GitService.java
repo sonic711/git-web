@@ -26,6 +26,10 @@ final class GitService {
         this.runner = runner;
     }
 
+    void configureHttpsTrust(HttpsTrustService service) {
+        runner.setHttpsTrustService(service);
+    }
+
     Map<String, Object> validate(AppConfig config, ProjectConfig project, RuleConfig rule) throws IOException, InterruptedException {
         List<Object> checks = new ArrayList<>();
         boolean ok = true;

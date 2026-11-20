@@ -27,6 +27,23 @@ final class ConfigService {
         return current;
     }
 
+    Path configDirectory() {
+        return configPath.toAbsolutePath().getParent();
+    }
+
+    synchronized void upsertCertificate(TrustedCertificate certificate) throws IOException {
+        AppConfig config = AppConfig.fromMap(current.toMap());
+        config.trustedCertificates.removeIf(item -> item.id.equals(certificate.id));
+        config.trustedCertificates.add(certificate);
+        replaceConfig(config);
+    }
+
+    synchronized void deleteCertificate(String id) throws IOException {
+        AppConfig config = AppConfig.fromMap(current.toMap());
+        Models.require(config.trustedCertificates.removeIf(item -> item.id.equals(id)), "Certificate not found");
+        replaceConfig(config);
+    }
+
     synchronized void reload() throws IOException {
         current = load();
     }
@@ -275,6 +292,10 @@ final class ConfigService {
 
     private void validate(AppConfig config) {
         Models.require(config.version == 1, "version must be 1");
+        Set<String> certificateIds = new HashSet<>();
+        for (TrustedCertificate certificate : config.trustedCertificates) {
+            Models.require(certificateIds.add(certificate.id), "duplicate certificate id: " + certificate.id);
+        }
         Set<String> remoteIds = new HashSet<>();
         for (RemoteConfig remote : config.remotes) {
             Models.require(remote.id != null && !remote.id.isBlank(), "remote id is required");

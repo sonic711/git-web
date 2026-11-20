@@ -35,6 +35,8 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
   const errors = [];
   const submissions = [];
   const ruleWrites = [];
+  const certificateWrites = [];
+  let certificates = [];
   let remoteConfig = { id: 'sit', name: 'SIT', baseUrl: 'ssh://git@git.example/team/',
     sshBaseUrl: 'ssh://git@git.example/team/', httpsBaseUrl: 'https://git.example:8443/team/', enabled: true };
   const unexpectedRequests = [];
@@ -46,6 +48,22 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     const pathname = new URL(request.url()).pathname;
     let body;
     if (pathname === '/api/system/config') body = { localWorkspaceRoot: '/workspace' };
+    else if (pathname === '/api/system/certificates' && request.method() === 'GET') body = certificates;
+    else if (pathname.startsWith('/api/system/certificates') && request.method() !== 'GET') {
+      const payload = request.postDataJSON();
+      if (payload?.name === 'invalid') return route.fulfill({ status: 400, json: { error: { message: 'Invalid X.509 certificate' } } });
+      certificateWrites.push(payload);
+      if (request.method() === 'DELETE') { certificates = []; body = { deleted: true }; }
+      else {
+        const certificate = { ...certificates[0], ...payload, id: 'ui-cert',
+          urlPrefix: payload.urlPrefix.startsWith('https://') ? payload.urlPrefix : 'https://' + payload.urlPrefix,
+          enabled: payload.enabled !== false, certificateCount: 1, validity: 'VALID',
+          notBefore: '2026-01-01T00:00:00Z', notAfter: '2027-01-01T00:00:00Z',
+          subject: 'CN=Internal CA', issuer: 'CN=Internal CA', sha256: '0123456789abcdef' };
+        certificates = [certificate];
+        body = certificate;
+      }
+    }
     else if (pathname === '/api/projects') body = projects;
     else if (pathname === '/api/remotes') body = [remoteConfig];
     else if (pathname === '/api/remotes/sit' && request.method() === 'PUT') {
@@ -146,6 +164,35 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     await page.locator('#remoteModal').waitFor({ state: 'hidden' });
     assert.equal(remoteConfig.baseUrl, 'https://git.example:8443/team/');
     assert.equal(remoteConfig.sshBaseUrl, 'ssh://git@git.example/team/');
+    await page.locator('.app-sidebar').getByRole('link', { name: 'HTTPS 憑證', exact: true }).click();
+    await page.getByText('尚未匯入 HTTPS 憑證', { exact: true }).waitFor();
+    await page.locator('#newCertificateButton').click();
+    await page.locator('#certificateName').fill('Internal Git CA');
+    await page.locator('#certificateUrlPrefix').fill('git.example:8443/team/');
+    await page.locator('#certificateFile').setInputFiles({ name: 'internal.pem', mimeType: 'application/x-pem-file', buffer: Buffer.from('public certificate UI fixture') });
+    await page.locator('#certificateForm button[type="submit"]').click();
+    await page.locator('#certificateModal').waitFor({ state: 'hidden' });
+    assert.ok(certificateWrites[0].contentBase64);
+    assert.equal(await page.locator('.certificate-card code').first().textContent(), 'https://git.example:8443/team/');
+    await page.locator('.certificate-card').getByRole('button', { name: '編輯', exact: true }).click();
+    await page.locator('#certificateUrlPrefix').fill('https://git.example:8443/review/');
+    await page.locator('#certificateForm button[type="submit"]').click();
+    await page.locator('#certificateModal').waitFor({ state: 'hidden' });
+    assert.equal(certificateWrites.at(-1).contentBase64, undefined, 'editing prefix should preserve the existing file');
+    await page.locator('.certificate-card').getByRole('button', { name: '停用', exact: true }).click();
+    await page.getByText('已停用', { exact: true }).waitFor();
+    if (artifactDir) await page.screenshot({ path: path.join(artifactDir, 'certificates-desktop.png'), fullPage: true });
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('.certificate-card').getByRole('button', { name: '刪除', exact: true }).click();
+    await page.getByText('尚未匯入 HTTPS 憑證', { exact: true }).waitFor();
+    await page.locator('#newCertificateButton').click();
+    await page.locator('#certificateName').fill('invalid');
+    await page.locator('#certificateUrlPrefix').fill('https://git.example/');
+    await page.locator('#certificateFile').setInputFiles({ name: 'invalid.pem', mimeType: 'application/x-pem-file', buffer: Buffer.from('invalid fixture') });
+    await page.locator('#certificateForm button[type="submit"]').click();
+    await page.locator('#certificateFormError').waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'certificateFormError');
+    await page.keyboard.press('Escape');
     await page.getByRole('navigation').getByRole('link', { name: '專案同步' }).click();
     await page.getByRole('heading', { name: '專案同步', exact: true }).waitFor();
     if (artifactDir) { await fs.mkdir(artifactDir, { recursive: true }); await page.screenshot({ path: path.join(artifactDir, 'projects-desktop.png'), fullPage: true }); }
@@ -179,7 +226,7 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
 
     for (const width of [375, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const url of ['/', '/batch-version.html', '/diff.html?ruleId=adm-sit']) {
+      for (const url of ['/', '/#certificates', '/batch-version.html', '/diff.html?ruleId=adm-sit']) {
         await page.goto(`${baseUrl}${url}`);
         await page.locator('#loadingOverlay').waitFor({ state: 'hidden' });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -197,7 +244,7 @@ const specs = [{ key: 'sit|sit|sit', sourceBranch: 'sit', targetRemoteId: 'sit',
     assert.ok((await font.body()).length > 100000);
     assert.deepEqual(errors, []);
     assert.deepEqual(unexpectedRequests, []);
-    console.log('UI smoke checks passed: SSH/HTTPS preview/save/reopen, Remote default selection, navigation, filtering, modal focus, batch selection, commit review, responsive layout, local fonts, reduced motion.');
+    console.log('UI smoke checks passed: certificate import/edit/toggle/delete/error feedback, SSH/HTTPS selection, navigation, filtering, modal focus, batch selection, commit review, responsive layout, local fonts, reduced motion.');
   } finally {
     await browser.close();
   }

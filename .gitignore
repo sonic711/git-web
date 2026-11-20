@@ -3,5 +3,6 @@ logs/
 state/
 cache/
 config/settings.json
+config/certificates/
 .DS_Store
 *.swp

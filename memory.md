@@ -10,6 +10,9 @@
 
 ## 目前狀態
 
+- 已新增 `/#certificates` HTTPS 憑證設定分頁：支援 PEM／DER 公開憑證、HTTPS 網域／URL 前綴、編輯／停用／刪除、有效期間與憑證組指紋。Root `trustedCertificates` 保存標準 PEM，隨設定檔匯入／匯出；`config/certificates/` 僅為忽略追蹤的 CA bundle 快取。
+- GitCommandRunner 對每個 Git 子程序套用 URL 範圍的 sslCAInfo、sslVerify=true、schannelUseSSLCAInfo=true、followRedirects=false；不修改系統／全域／Repo 信任設定。真實本機自簽 HTTPS Git 與 API 整合測試、UI CRUD／錯誤提示及響應式測試已通過；Windows Schannel 僅驗證參數，尚未實機驗證。細節見 `docs/16-https-certificates.md`。
+
 - 2026-11-20：已新增規則目標 SSH／HTTPS 選擇與 Remote 雙 URL／預設端點設定，並更新 schema、API 與 UI 文件。Java 測試覆蓋舊設定、僅 HTTPS、儲存／匯入匯出、端點驗證及本地 Git remote 切換；UI 測試覆蓋預覽、儲存、重新開啟與預設端點切換。
 
 - 2026-10-21：改版前工作區乾淨，`84fb51b` 已建立 `pre-ui-redesign-20261021` tag 並推送 `origin` 與 `bt`。

@@ -36,6 +36,7 @@
 - `/#remotes`：Remote 模板管理。
 - `/#activity`：最近載入的執行紀錄與審查資訊。
 - `/#settings`：全局工作目錄、匯入與匯出。
+- `/#certificates`：HTTPS 公開憑證、網域／URL 前綴與信任設定，並與工作區設定互設分頁連結。
 - `/batch-version.html`：批次版本比對。
 - `/diff.html?ruleId=...`：Commit 審查。
 

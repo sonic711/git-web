@@ -111,6 +111,12 @@
 }
 ```
 
+## HTTPS 憑證 API
+
+設定頁新增 `GET/POST /api/system/certificates` 及 `PUT/DELETE /api/system/certificates/{id}`。匯入內容以 `contentBase64` 傳送，伺服器驗證 X.509 公開憑證、限制 256 KB，並保存到主設定檔；metadata 回應不包含 PEM。
+
+請求欄位、前綴套用規則與即時生效方式見 [HTTPS 憑證設定](16-https-certificates.md)。
+
 ## Remote API
 
 ### `GET /api/remotes`

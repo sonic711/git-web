@@ -17,6 +17,7 @@
 10. sync 規則可比較來源與目標的 commit hash、tree hash 與雙方獨有 commit 數量，確認歷程及程式內容是否一致。
 11. Projects 列表可依關鍵字、Remote Tab、規則模式、執行方式與最後狀態篩選，避免規則數量增加後主畫面過長。
 12. 可依相同 branch / remote 規格，批次比較多個專案的來源與目標 commit、tree 與 HEAD tags。
+13. HTTPS 憑證分頁可匯入內部 CA／自簽公開憑證並指定網域／URL 前綴，保留 TLS 驗證。憑證隨設定檔匯入／匯出，不修改系統或全域 Git 設定。
 
 ## 文件清單
 
@@ -36,6 +37,7 @@
 - [docs/13-rule-filtering.md](/Users/sonic711/Desktop/development/git-web/docs/13-rule-filtering.md)
 - [docs/14-batch-version-comparison.md](/Users/sonic711/Desktop/development/git-web/docs/14-batch-version-comparison.md)
 - [docs/15-ui-ux-redesign.md](/Users/sonic711/Desktop/development/git-web/docs/15-ui-ux-redesign.md)
+- [docs/16-https-certificates.md](/Users/sonic711/Desktop/development/git-web/docs/16-https-certificates.md)
 
 ## UI/UX 工作區
 
